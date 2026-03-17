@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Used to scan QR codes and verify your face for attendance</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Used to detect classroom BLE beacons for attendance</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Used to detect classroom BLE beacons for attendance</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Used to range iBeacons for classroom attendance detection</string>
+	<key>NSServices</key>
+	<array>
+		<dict/>
+	</array>
+</dict>
+</plist>
