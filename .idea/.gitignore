@@ -3,3 +3,6 @@
 /workspace.xml
 prompt.txt
 *.zip
+.gradle/
+local.properties
+.kotlin/
