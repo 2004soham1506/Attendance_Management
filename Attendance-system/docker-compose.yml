@@ -1,0 +1,35 @@
+# version: '3.8'
+
+services:
+
+  db:
+    image: postgres:15
+    container_name: attendance_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: attendance
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: attendance_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "4040:4040"
+    environment:
+      JWT_SECRET: 54657d5cdc6b81baf001f492ce508a16c9ac8dd33e5829692006b8a73b98844f3d389e92fdce5220ecf4606f9e0b7e6771382e5afc72b2dc2c0a4ed41f4b4f26
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/attendance
+
+volumes:
+  db_data:
