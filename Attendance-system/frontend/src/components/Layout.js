@@ -2,7 +2,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, BookOpen, BarChart3, Shield,
   LogOut, GraduationCap, ChevronLeft, ChevronRight,
-  Bell, Users
+  Bell, Users,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -15,8 +15,10 @@ const NAV_PROF = [
 
 const NAV_ADMIN = [
   { icon: LayoutDashboard, label: "Overview",  id: "dashboard" },
-  { icon: BarChart3,       label: "Analytics", id: "analytics" },
-  { icon: Shield,          label: "Admin",     id: "admin"     },
+  { icon: BookOpen,         label: "Courses",   id: "courses"   },
+  { icon: Users,            label: "Students",  id: "students"  },
+  { icon: BarChart3,        label: "Analytics", id: "analytics" },
+  { icon: Shield,           label: "Admin",     id: "admin"     },
 ];
 
 export default function Layout({ page, setPage, children }) {
@@ -25,6 +27,9 @@ export default function Layout({ page, setPage, children }) {
 
   const nav = user?.role === "admin" ? NAV_ADMIN : NAV_PROF;
 
+  // Header label — find from nav, fallback gracefully
+  const pageLabel = nav.find(n => n.id === page)?.label ?? "Dashboard";
+
   return (
     <div className="flex h-screen bg-ink overflow-hidden">
       <aside className={`flex flex-col bg-card border-r border-edge shrink-0 transition-all duration-300 ${collapsed ? "w-16" : "w-56"}`}>
@@ -32,11 +37,6 @@ export default function Layout({ page, setPage, children }) {
           <div className="w-8 h-8 rounded-xl bg-azure-500 flex items-center justify-center shrink-0 shadow-glow">
             <GraduationCap size={15} className="text-white" />
           </div>
-          {/* <img
-            src="/IITH.png"
-            alt="IITH Logo"
-            className="w-8 h-8 object-contain"
-          /> */}
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-snow font-bold text-sm leading-none">DIAMS</p>
@@ -61,7 +61,12 @@ export default function Layout({ page, setPage, children }) {
           {!collapsed && (
             <div className="px-3 py-2.5 rounded-xl bg-white/4 mb-1">
               <p className="text-snow text-xs font-medium truncate">{user?.name}</p>
-              <p className="text-soft text-xs truncate capitalize">{user?.role}</p>
+              <p className="text-soft text-xs truncate capitalize">
+                {user?.role}
+                {user?.taCourseIds?.length > 0 && (
+                  <span className="ml-1 text-violet-400">(+TA)</span>
+                )}
+              </p>
             </div>
           )}
           <button onClick={logout} title={collapsed ? "Log out" : ""}
@@ -79,15 +84,16 @@ export default function Layout({ page, setPage, children }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="flex items-center justify-between px-6 py-4 border-b border-edge bg-card/50 backdrop-blur-sm shrink-0">
           <div>
-            <h1 className="text-snow font-semibold text-sm capitalize">
-              {nav.find(n => n.id === page)?.label ?? "Dashboard"}
-            </h1>
+            <h1 className="text-snow font-semibold text-sm capitalize">{pageLabel}</h1>
             <p className="text-soft text-xs mt-0.5">
               {new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="w-8 h-8 rounded-xl bg-edge flex items-center justify-center text-soft hover:text-snow transition-colors" onClick={() => alert("Notifications coming soon")}>
+            <button
+              className="w-8 h-8 rounded-xl bg-edge flex items-center justify-center text-soft hover:text-snow transition-colors"
+              onClick={() => alert("Notifications coming soon")}
+            >
               <Bell size={14} />
             </button>
             <div className="w-8 h-8 rounded-xl bg-azure-500 flex items-center justify-center text-xs font-bold text-white select-none">
