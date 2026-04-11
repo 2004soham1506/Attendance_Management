@@ -1,11 +1,11 @@
-# ATTENDANCE SYSTEM (BLE + QR + SERVER)
+# 📡 ATTENDANCE SYSTEM (BLE + QR + SERVER)
 
 ## OVERVIEW
 This project implements a **real-time attendance system** using:
 
-- BLE beacons (ESP32)
-- Mobile frontend (scans BLE / QR)
-- Node.js backend (validation service)
+- 📶 BLE beacons (ESP32)
+- 📱 Mobile frontend (scans BLE / QR)
+- 🌐 Node.js backend (validation service)
 
 The system supports **two attendance modes**:
 - BLE-based proximity validation  
@@ -15,8 +15,9 @@ Designed for **secure, contactless classroom attendance**.
 
 ---
 
-## PROJECT STRUCTURE
+## 🏗️ PROJECT STRUCTURE
 
+```
 server/
 |
 |-- src/
@@ -31,10 +32,11 @@ server/
 |-- server.js
 |-- package.json
 |-- .env
+```
 
 ---
 
-## REQUIREMENTS
+## ⚙️ REQUIREMENTS
 
 ### Backend
 - Node.js (v18+ recommended)
@@ -43,7 +45,9 @@ server/
 
 Install dependencies:
 
+```
 npm install
+```
 
 ---
 
@@ -74,13 +78,15 @@ npm install
 
 ---
 
-### FINAL STEP
+### 🔐 FINAL STEP
 
+```
 Token validation → Face verification → Attendance marked
+```
 
 ---
 
-##  API ENDPOINTS
+## 📡 API ENDPOINTS
 
 ### BLE
 
@@ -88,9 +94,11 @@ Token validation → Face verification → Attendance marked
 Generate minor for beacon
 
 Request:
+```json
 {
   "major_id": "abc123"
 }
+```
 
 ---
 
@@ -98,6 +106,7 @@ Request:
 Validate BLE attendance
 
 Request:
+```json
 {
   "class_id": "CS101",
   "beacons": [
@@ -108,6 +117,7 @@ Request:
     }
   ]
 }
+```
 
 ---
 
@@ -117,9 +127,11 @@ Request:
 Generate QR hash
 
 Request:
+```json
 {
   "class_id": "CS101"
 }
+```
 
 ---
 
@@ -127,45 +139,56 @@ Request:
 Validate QR attendance
 
 Request:
+```json
 {
   "class_id": "CS101",
   "hash": "a1b2c3d4",
   "timestamp": 1712770000000
 }
+```
+
 ---
 
-## ▶RUNNING THE PROJECT
+## ▶️ RUNNING THE PROJECT
 
 ### 1. Start MongoDB
-mongosh
+```
+mongod
+```
 
 ---
 
 ### 2. Start Server
+```
 npm run dev
+```
 
 Server runs at:
+```
 http://localhost:8000
+```
 
 ---
 
 ### 3. Configure ESP32
 
+```cpp
 String serverURL = "http://<SERVER_IP>:8000/ble/generate-minor";
+```
 
 ---
 
-## KEY FEATURES
+## 🧠 KEY FEATURES
 
-- Cache-first validation (fast)
-- TTL-based cleanup in MongoDB  
-- Multi-beacon support with RSSI filtering  
-- Time-bound tokens (BLE + QR)  
-- Scalable architecture  
+- ⚡ Cache-first validation (fast)
+- 🧹 TTL-based cleanup in MongoDB  
+- 📶 Multi-beacon support with RSSI filtering  
+- 🔐 Time-bound tokens (BLE + QR)  
+- 📈 Scalable architecture  
 
 ---
 
-## NOTES
+## ⚠️ NOTES
 
 - ESP32 and server must be on same network  
 - RSSI values vary across devices  
@@ -174,7 +197,7 @@ String serverURL = "http://<SERVER_IP>:8000/ble/generate-minor";
 
 ---
 
-## FUTURE IMPROVEMENTS
+## 🔮 FUTURE IMPROVEMENTS
 
 - Attendance logging system  
 - Redis for distributed caching  
@@ -184,13 +207,14 @@ String serverURL = "http://<SERVER_IP>:8000/ble/generate-minor";
 
 ---
 
-## AUTHOR
+## 👨‍💻 AUTHOR
 
 Kosaraju Jyothsna Abhay  
-ES22BTECH11021
+ES22BTECH11021  
+IIT Hyderabad  
 
 ---
 
-## SUMMARY
+## 💬 SUMMARY
 
 > A scalable, real-time attendance system using BLE proximity + QR time validation
