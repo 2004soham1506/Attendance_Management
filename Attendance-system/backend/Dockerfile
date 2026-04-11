@@ -1,11 +1,17 @@
-FROM python:3.11-slim
+FROM node:20-alpine
 
 WORKDIR /app
 
+# Install dependencies first (layer cache)
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev
+
+# Copy source
 COPY . .
 
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install flask-cors
+# Create backups directory
+RUN mkdir -p backups
+
 EXPOSE 4040
 
-CMD ["python", "-m", "app.main"]
+CMD ["node", "server.js"]

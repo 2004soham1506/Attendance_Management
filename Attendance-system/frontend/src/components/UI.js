@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
 export function StatCard({ label, value, sub, icon: Icon, color = "azure", delay = 0 }) {
@@ -46,6 +46,7 @@ export function Badge({ label, variant = "default" }) {
     danger:  "bg-rose-500/15 text-rose-400",
     prof:    "bg-violet-500/15 text-violet-400",
     admin:   "bg-rose-500/15 text-rose-400",
+    ta:      "bg-amber-500/15 text-amber-400 border border-amber-500/20",
   };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium font-mono ${map[variant] ?? map.default}`}>
@@ -57,7 +58,7 @@ export function Badge({ label, variant = "default" }) {
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
 export function ProgressBar({ value, max = 100, size = "sm" }) {
-  const pct   = Math.min(100, (value / max) * 100);
+  const pct   = Math.min(100, Math.max(0, (value / max) * 100));
   const color = pct >= 75 ? "bg-jade-500" : pct >= 60 ? "bg-amber-500" : "bg-rose-500";
   const h     = size === "sm" ? "h-1.5" : "h-2.5";
   return (
@@ -76,6 +77,7 @@ export function Button({ children, onClick, variant = "primary", size = "md", di
     ghost:     "hover:bg-white/5 text-soft hover:text-snow",
     danger:    "bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/20",
     jade:      "bg-jade-500/15 hover:bg-jade-500/25 text-jade-400 border border-jade-500/20",
+    violet:    "bg-violet-500/15 hover:bg-violet-500/25 text-violet-400 border border-violet-500/20",
   };
   const sizes = {
     xs: "px-2.5 py-1.5 text-xs",
@@ -85,7 +87,7 @@ export function Button({ children, onClick, variant = "primary", size = "md", di
   };
   return (
     <button type={type} onClick={onClick} disabled={disabled || loading}
-      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+      className={`${base} ${variants[variant] ?? variants.primary} ${sizes[size]} ${className}`}>
       {loading && <Loader2 size={14} className="animate-spin" />}
       {children}
     </button>
@@ -126,6 +128,28 @@ export function Select({ label, children, ...props }) {
   );
 }
 
+// ── Modal ─────────────────────────────────────────────────────────────────────
+export function Modal({ title, subtitle, onClose, children, maxWidth = "max-w-lg" }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+      <div className={`bg-card border border-edge rounded-2xl w-full ${maxWidth} max-h-[88vh] flex flex-col`}>
+        <div className="px-5 py-4 border-b border-edge flex items-center justify-between shrink-0">
+          <div>
+            <p className="text-snow font-semibold text-sm">{title}</p>
+            {subtitle && <p className="text-soft text-xs font-mono mt-0.5">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="text-dim hover:text-snow transition-colors p-1 rounded-lg hover:bg-white/5">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 export function Empty({ icon: Icon, title, sub }) {
   return (
@@ -152,8 +176,9 @@ export function SectionHeader({ title, action }) {
   );
 }
 
-// ── Tooltip-style label ───────────────────────────────────────────────────────
-export function AttendancePct({ value }) {
+// ── AttendancePct ─────────────────────────────────────────────────────────────
+export function AttendancePct({ value, small = false }) {
   const color = value >= 75 ? "text-jade-400" : value >= 60 ? "text-amber-400" : "text-rose-400";
-  return <span className={`font-mono font-bold text-sm ${color}`}>{value.toFixed(0)}%</span>;
+  const size  = small ? "text-xs" : "text-sm";
+  return <span className={`font-mono font-bold ${size} ${color}`}>{Number(value).toFixed(0)}%</span>;
 }
