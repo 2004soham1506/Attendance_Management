@@ -1,28 +1,29 @@
 /**
  * autoSessionService.js
  *
- * FIX: scheduledTime is now stored as proper UTC (after the lecturePopulator
- * fix).  The ±2-minute window query against MongoDB is correct.
+ * Runs every minute via cron.
+ * Creates a fallback 5-min BLE session for any lecture due right now
+ * that has no active scheduled session covering it.
  *
- * Previously the "covered" check converted the stored UTC time to local hours/
- * minutes and compared against IST schedule strings — causing an off-by-5h30m
- * mismatch.  We now convert the stored UTC timestamp to IST before extracting
- * hours/minutes for that comparison.
+ * Timezone contract (after lecturePopulator fix):
+ *   - lecture.scheduledTime  : UTC timestamp
+ *   - schedule.startTime/endTime : IST strings ("HH:mm")
+ *   - schedule.scheduledDay      : IST day name ("Monday" etc.)
+ *
+ * So we convert "now" and lecture times to IST for all comparisons.
  */
 const Course   = require('../models/Course');
 const Session  = require('../models/Session');
 
-const DAY_NAMES     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 19 800 000 ms
+const DAY_NAMES      = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const IST_OFFSET_MS  = 5.5 * 60 * 60 * 1000; // 19 800 000 ms
 
-/** Return { dayIdx, hours, minutes } of a UTC Date expressed in IST */
+/** Return IST components of a UTC Date */
 function toIST(utcDate) {
-  const istMs  = utcDate.getTime() + IST_OFFSET_MS;
-  const d      = new Date(istMs);
+  const d = new Date(utcDate.getTime() + IST_OFFSET_MS);
   return {
-    dayIdx:  d.getUTCDay(),
-    hours:   d.getUTCHours(),
-    minutes: d.getUTCMinutes(),
+    dayName: DAY_NAMES[d.getUTCDay()],
+    totalMin: d.getUTCHours() * 60 + d.getUTCMinutes(),
   };
 }
 
@@ -31,8 +32,7 @@ async function autoCreateFallbackSessions() {
   const windowStart = new Date(now.getTime() - 2 * 60000);
   const windowEnd   = new Date(now.getTime() + 2 * 60000);
 
-  const { dayIdx: todayIdxIST } = toIST(now);
-  const todayName = DAY_NAMES[todayIdxIST];
+  const { dayName: todayName } = toIST(now);
 
   const courses = await Course.find({
     'lectures.scheduledTime': { $gte: windowStart, $lte: windowEnd },
@@ -47,20 +47,19 @@ async function autoCreateFallbackSessions() {
     );
 
     for (const lecture of dueLectures) {
-      // Convert stored UTC time to IST to compare against schedule strings
-      const { hours, minutes } = toIST(new Date(lecture.scheduledTime));
-      const lecMin = hours * 60 + minutes;
+      // Convert stored UTC scheduledTime to IST for schedule comparison
+      const { dayName: lecDayName, totalMin: lecMin } = toIST(new Date(lecture.scheduledTime));
 
+      // Check if a schedule entry covers this lecture time
       const covered = (course.schedules || []).some(s => {
-        if (s.scheduledDay !== todayName) return false;
-        const [sh, sm] = s.startTime.split(':').map(Number);
-        const [eh, em] = s.endTime.split(':').map(Number);
+        if (s.scheduledDay !== lecDayName) return false;
+        const [sh, sm] = s.startTime.split(':').map(Number); // IST
+        const [eh, em] = s.endTime.split(':').map(Number);   // IST
         return lecMin >= sh * 60 + sm && lecMin < eh * 60 + em;
       });
 
       if (covered) continue;
 
-      // Check if any active session already exists for this lecture
       const existing = await Session.findOne({
         course:     course._id,
         lectureUID: lecture.lectureUID,

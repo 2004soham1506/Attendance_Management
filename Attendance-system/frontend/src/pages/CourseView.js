@@ -126,7 +126,6 @@ function ScheduleRow({ sch, index, onToggle, onDelete, onSave, saving }) {
           <span className="text-snow text-sm font-medium">{sch.scheduledDay}</span>
           <span className="text-soft text-xs font-mono">{sch.startTime} → {sch.endTime} IST</span>
           <Badge label={sch.method} variant={methodVariant} />
-          {!sch.switch && <span className="text-dim text-xs font-mono">auto-start off</span>}
         </div>
       </div>
       {/* Pencil edit */}
