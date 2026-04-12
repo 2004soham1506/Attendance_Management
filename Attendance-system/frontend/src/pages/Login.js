@@ -96,7 +96,10 @@ export default function Login() {
           {/* Demo credentials hint */}
           <div className="mt-6 p-3 rounded-xl bg-white/3 border border-edge">
             <p className="text-dim text-xs font-mono text-center">
-              Demo: profA@test.com / password123
+              Demo Credentials: 
+              admin@iith.ac.in / adminpass,
+              arora@iith.ac.in / prof123,
+              cs22b0001@iith.ac.in / stud123
             </p>
           </div>
         </div>

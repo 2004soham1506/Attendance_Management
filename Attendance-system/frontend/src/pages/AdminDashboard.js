@@ -80,7 +80,7 @@ function StudentAnalyticsModal({ student, onClose }) {
                   </div>
                   <ProgressBar value={c.attendancePct} max={100} size="sm" />
                   <p className="text-dim text-xs font-mono mt-1.5">
-                    {c.attended} / {c.sessionsHeld} lectures attended · {c.totalLectures} scheduled
+                    {c.attended} / {c.sessionsHeld} lectures attended
                   </p>
                 </div>
               ))}
@@ -647,12 +647,12 @@ export default function AdminDashboard() {
       {stats && (
         <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 animate-slide-up">
           {[
-            { label: "Students",    value: stats.students,    color: "text-jade-400"   },
-            { label: "Professors",  value: stats.professors,  color: "text-violet-400" },
-            { label: "Courses",     value: stats.courses,     color: "text-azure-400"  },
-            { label: "Sessions",    value: stats.sessions,    color: "text-amber-400"  },
-            { label: "Enrollments", value: stats.enrollments, color: "text-rose-400"   },
-            { label: "Att. Marks",  value: stats.attendance,  color: "text-snow"       },
+            { label: "Students",      value: stats.students,    color: "text-jade-400"   },
+            { label: "Professors",    value: stats.professors,  color: "text-violet-400" },
+            { label: "Courses",       value: stats.courses,     color: "text-azure-400"  },
+            { label: "Active Sessions", value: stats.sessions,    color: "text-amber-400"  },
+            { label: "Enrollments",   value: stats.enrollments, color: "text-rose-400"   },
+            { label: "Att. Marks",    value: stats.attendance,  color: "text-snow"       },
           ].map((s, i) => (
             <div key={i} className="bg-card border border-edge rounded-2xl p-4 text-center">
               <p className="text-soft text-xs uppercase tracking-widest mb-1">{s.label}</p>
@@ -710,12 +710,12 @@ export default function AdminDashboard() {
         </ActionCard>
       </div>
 
-      <div className="flex items-center gap-2 px-1 animate-slide-up">
+      {/* <div className="flex items-center gap-2 px-1 animate-slide-up">
         <CheckCircle2 size={13} className="text-jade-400" />
         <p className="text-dim text-xs font-mono">
           All timestamps stored as UTC · displayed in IST (UTC+5:30)
         </p>
-      </div>
+      </div> */}
     </div>
   );
 }

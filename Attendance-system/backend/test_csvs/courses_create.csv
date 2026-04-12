@@ -1,0 +1,4 @@
+_id,name,department,slot,venue,startDate,endDate,instructors,tas
+TST_CS101,Test: Intro to Computing,CSE,D,LH-1,2026-01-01,2026-04-30,prof_test01,"TST001,TST002"
+TST_EE201,Test: Circuit Theory,EE,F,LH-7,2026-01-01,2026-04-30,prof_test02,TST003
+TST_MA301,Test: Probability & Stats,MA,G,LH-12,2026-01-01,2026-04-30,"prof_test01,prof_test03",

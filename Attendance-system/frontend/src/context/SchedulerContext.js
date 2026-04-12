@@ -77,16 +77,29 @@ export function SchedulerProvider({ children }) {
         const schedulerKey = `scheduler_sess_${cacheKey}`;
 
         if (activeWindow && !activeSess) {
-          // Should be running — start it
+          // Should be running — start it.
+          // FIX: Pass method as-is from the schedule (already in correct case: "BLE", "QRCode",
+          // "Manual"). Previously used .toLowerCase() which produced "ble"/"qrcode" — these
+          // fail the Session schema enum validation ['BLE','QRCode','Manual'], causing a
+          // Mongoose error on session creation. Because the session was never saved, the
+          // duplicate-guard was bypassed on the next tick, and resolveOrCreateLecture ran
+          // again at a slightly different time → creating a second ad-hoc lecture entry.
+          const method = activeWindow.method || "BLE";
           try {
             const res = await startSession({
               course_id: cacheKey,
-              mode:      activeWindow.method?.toLowerCase() || "ble",
+              mode:      method,   // FIX: use the exact casing from schedule (BLE, QRCode, Manual)
             });
             if (res.data?.session_id) {
               sessionStorage.setItem(schedulerKey, String(res.data.session_id));
             }
-          } catch {}
+          } catch (e) {
+            // 409 means a session already exists for this lecture+method — that's fine,
+            // record the existing session_id so we can end it when the window closes.
+            if (e.response?.status === 409 && e.response?.data?.session_id) {
+              sessionStorage.setItem(schedulerKey, String(e.response.data.session_id));
+            }
+          }
 
         } else if (!activeWindow && activeSess) {
           // Outside window — end only if this scheduler started it

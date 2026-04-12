@@ -8,7 +8,7 @@ import CoursesPage        from "./pages/CoursesPage";
 import CourseView         from "./pages/CourseView";
 import Analytics          from "./pages/Analytics";
 import AdminDashboard     from "./pages/AdminDashboard";
-import AdminOverview      from "./pages/AdminOverview";
+// import AdminOverview      from "./pages/AdminOverview";
 import AdminCourses       from "./pages/AdminCourses";
 import AdminStudents      from "./pages/AdminStudents";
 import Students           from "./pages/Students";
@@ -49,9 +49,8 @@ function AppContent() {
     <Layout page={page} setPage={handleSetPage}>
       {user.role === "admin" ? (
         <>
-          {page === "dashboard" && <AdminOverview />}
+          {page === "dashboard" && <AdminDashboard />}
           {page === "analytics" && <Analytics />}
-          {page === "admin"     && <AdminDashboard />}
           {page === "courses"   && <AdminCourses />}
           {page === "students"  && <AdminStudents />}
         </>

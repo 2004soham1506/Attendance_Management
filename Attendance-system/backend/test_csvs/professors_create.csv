@@ -1,0 +1,4 @@
+_id,name,email,password,department
+prof_test01,Prof. Testson,testson@iith.ac.in,prof123,CSE
+prof_test02,Prof. Bulkmann,bulkmann@iith.ac.in,prof123,EE
+prof_test03,Prof. Csvpath,csvpath@iith.ac.in,prof123,MA

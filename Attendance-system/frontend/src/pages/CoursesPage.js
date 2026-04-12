@@ -25,7 +25,10 @@ export default function CoursesPage({ setActiveCourse }) {
         await Promise.all(res.data.map(async (c) => {
           try {
             const s = await getActiveSession(c.id);
-            sessionMap[c.id] = s.data;
+            // FIX: getActiveSession returns {} (empty object) when there is no
+            // active session. An empty object is truthy, which caused the LIVE
+            // badge to always show. We must check for session_id explicitly.
+            sessionMap[c.id] = s.data?.session_id ? s.data : null;
           } catch {
             sessionMap[c.id] = null;
           }
@@ -74,6 +77,7 @@ export default function CoursesPage({ setActiveCourse }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {courses.map((c, i) => {
+              // FIX: sessions[c.id] is now null (not {}) when no session is active
               const active = sessions[c.id];
               return (
                 <div

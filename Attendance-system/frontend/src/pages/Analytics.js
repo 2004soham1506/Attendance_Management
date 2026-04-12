@@ -102,7 +102,7 @@ function CourseStudentTable({ courseId }) {
   return (
     <div className="space-y-2">
       <p className="text-soft text-xs font-mono">
-        {data.enrolled} enrolled · {data.totalLectures} lectures held
+        {data.enrolled} enrolled
       </p>
       <div className="divide-y divide-edge rounded-xl border border-edge overflow-hidden max-h-64 overflow-y-auto">
         {data.studentStats.length === 0 ? (
@@ -210,11 +210,9 @@ function ProfAnalyticsView({ user }) {
    *
    * What we show:
    *   "Lectures Held"   = sum of lecturesHeld  (lectures that actually happened)
-   *   "Planned Lectures" = sum of lectures      (from slot map)
    *   "Avg Marks/Lecture" = attendance / lecturesHeld
    */
   const totalLecturesHeld = profData.reduce((s, c) => s + (c.lecturesHeld ?? c.sessions ?? 0), 0);
-  const totalPlanned      = profData.reduce((s, c) => s + (c.lectures ?? 0), 0);
   const totalAttendance   = profData.reduce((s, c) => s + (c.attendance ?? 0), 0);
   const avgMarksPerLecture = totalLecturesHeld > 0
     ? (totalAttendance / totalLecturesHeld).toFixed(1)
@@ -224,7 +222,6 @@ function ProfAnalyticsView({ user }) {
     name:         c.course_name.length > 12 ? c.course_name.slice(0, 12) + "…" : c.course_name,
     avg_pct:      c.avg_pct ?? 0,
     lecturesHeld: c.lecturesHeld ?? 0,
-    planned:      c.lectures ?? 0,
   }));
 
   return (
@@ -238,14 +235,6 @@ function ProfAnalyticsView({ user }) {
           color="azure"
           delay={0}
           sub="lectures that had at least one session"
-        />
-        <StatCard
-          label="Planned Lectures"
-          value={totalPlanned}
-          icon={Calendar}
-          color="violet"
-          delay={80}
-          sub="from slot map across all courses"
         />
         <StatCard
           label="Avg Marks / Lecture"
@@ -304,7 +293,7 @@ function ProfAnalyticsView({ user }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-snow text-sm font-medium">{c.course_name}</p>
                     <p className="text-soft text-xs mt-0.5">
-                      {c.lecturesHeld ?? 0} held · {c.lectures ?? 0} planned · {c.enrolled} enrolled
+                      {c.lecturesHeld ?? 0} held · {c.enrolled} enrolled
                     </p>
                   </div>
                   <div className="w-28 shrink-0">
@@ -361,7 +350,7 @@ function AdminAnalyticsView() {
     <div className="space-y-8">
       <div className="grid grid-cols-3 lg:grid-cols-6 gap-4">
         {[
-          { label: "Active Sessions", value: totals.activeSessions ?? totals.sessions, color: "text-jade-400"   },
+          { label: "Total Sessions", value: totals.sessions, color: "text-jade-400"   },
           { label: "Att. Marks",      value: totals.attendance,                        color: "text-azure-400"  },
           { label: "Avg/Session",     value: totals.avg,                               color: "text-violet-400" },
           { label: "Students",        value: totals.students,                          color: "text-amber-400"  },
@@ -427,7 +416,7 @@ function AdminAnalyticsView() {
                     <div className="flex-1 min-w-0">
                       <p className="text-snow text-sm font-medium">{c.name}</p>
                       <p className="text-soft text-xs mt-0.5">
-                        {c.lecturesHeld ?? c.sessions ?? 0} held · {c.lectures ?? 0} planned · {c.enrolled} enrolled
+                        {c.lecturesHeld ?? c.sessions ?? 0} held · {c.enrolled} enrolled
                       </p>
                     </div>
                     <div className="w-28 shrink-0">

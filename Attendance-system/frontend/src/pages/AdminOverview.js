@@ -77,7 +77,6 @@ export default function AdminOverview() {
         <h2 className="text-snow font-semibold text-sm mb-3">System Summary</h2>
         <p className="text-soft text-sm leading-relaxed">
           DIAMS is tracking{" "}
-          <span className="text-snow font-medium">{stats?.lectures ?? 0}</span> scheduled lectures across{" "}
           <span className="text-snow font-medium">{stats?.courses ?? 0}</span> courses with{" "}
           <span className="text-snow font-medium">{stats?.enrollments ?? 0}</span> active student enrollments.
         </p>

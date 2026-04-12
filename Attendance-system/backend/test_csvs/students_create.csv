@@ -1,0 +1,11 @@
+_id,name,email,password,imageURL
+TST001,Alice Tester,tst001@iith.ac.in,stud123,
+TST002,Bob Bulkload,tst002@iith.ac.in,stud123,
+TST003,Carol Comma,tst003@iith.ac.in,stud123,
+TST004,Dave Delimiter,tst004@iith.ac.in,stud123,
+TST005,Eve Enrollee,tst005@iith.ac.in,stud123,
+TST006,Frank Fields,tst006@iith.ac.in,stud123,
+TST007,Grace Grid,tst007@iith.ac.in,stud123,
+TST008,Hank Header,tst008@iith.ac.in,stud123,
+TST009,Ivy Import,tst009@iith.ac.in,stud123,
+TST010,Jake JsonFail,tst010@iith.ac.in,stud123,

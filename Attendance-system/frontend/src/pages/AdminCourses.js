@@ -239,7 +239,7 @@ function CourseStudentStats({ courseId }) {
         <p className="text-soft text-xs font-medium uppercase tracking-wider">
           Enrolled Students
           <span className="ml-1.5 text-dim normal-case font-mono">
-            ({data.enrolled} enrolled · {data.totalLectures} lectures held)
+            ({data.enrolled} enrolled)
           </span>
         </p>
         <div className="relative">

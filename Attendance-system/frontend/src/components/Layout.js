@@ -14,11 +14,11 @@ const NAV_PROF = [
 ];
 
 const NAV_ADMIN = [
-  { icon: LayoutDashboard, label: "Overview",  id: "dashboard" },
+  { icon: LayoutDashboard, label: "Admin",  id: "dashboard" },
   { icon: BookOpen,         label: "Courses",   id: "courses"   },
   { icon: Users,            label: "Students",  id: "students"  },
   { icon: BarChart3,        label: "Analytics", id: "analytics" },
-  { icon: Shield,           label: "Admin",     id: "admin"     },
+  // { icon: Shield,           label: "Admin",     id: "admin"     },
 ];
 
 export default function Layout({ page, setPage, children }) {

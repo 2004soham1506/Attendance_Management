@@ -44,7 +44,9 @@ export default function ProfessorDashboard({ setPage, setActiveCourse }) {
         await Promise.all(courseRes.data.map(async (c) => {
           try {
             const s = await getActiveSession(c.id);
-            sessionMap[c.id] = s.data;
+            // FIX: getActiveSession returns {} when no session is active.
+            // An empty object is truthy, so we must check for session_id.
+            sessionMap[c.id] = s.data?.session_id ? s.data : null;
           } catch {
             sessionMap[c.id] = null;
           }
@@ -54,19 +56,16 @@ export default function ProfessorDashboard({ setPage, setActiveCourse }) {
         // Real avg attendance from prof analytics
         try {
           const analytics = await getProfAnalytics(user.user_id);
-          const data = analytics.data; // [{course_id, sessions, attendance, avg}]
+          const data = analytics.data;
 
-          const totalSessions  = data.reduce((s, c) => s + c.sessions, 0);
+          const totalSessions   = data.reduce((s, c) => s + c.sessions, 0);
           const totalAttendance = data.reduce((s, c) => s + c.attendance, 0);
-          const avgAttendance  = totalSessions > 0
+          const avgAttendance   = totalSessions > 0
             ? totalAttendance / totalSessions
             : 0;
 
-          // Unique students across all courses (rough: sum unique per course)
-          // We'll use enrollment-based count via getCourseStudents indirectly
-          // For the dashboard summary, we just show avg marks per session
           setStats({
-            totalStudents: 0, // will be updated below
+            totalStudents: 0,
             avgAttendance,
           });
         } catch {}
@@ -78,7 +77,9 @@ export default function ProfessorDashboard({ setPage, setActiveCourse }) {
     load();
   }, [user.user_id]);
 
-  const activeSessions = Object.values(sessions).filter(Boolean).length;
+  // FIX: sessions[c.id] is null when no session is active (fixed above),
+  // so this filter now correctly counts only truly active sessions.
+  const activeSessions = Object.values(sessions).filter(s => s && s.session_id).length;
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -130,6 +131,7 @@ export default function ProfessorDashboard({ setPage, setActiveCourse }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {courses.map((c, i) => {
+              // FIX: sessions[c.id] is now null (not {}) when no session is active
               const active = sessions[c.id];
               return (
                 <div
