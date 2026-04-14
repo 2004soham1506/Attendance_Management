@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: localStorage.getItem("api_url") || "http://localhost:4040",
+  // baseURL: localStorage.getItem("api_url") || "http://localhost:4040",
+  baseURL: localStorage.getItem("api_url") || "https://attendance-management-gazr.onrender.com",
   timeout: 10000,
 });
 
