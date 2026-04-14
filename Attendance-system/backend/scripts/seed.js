@@ -32,7 +32,7 @@ const MONGO_URI    = process.env.MONGO_URI || 'mongodb://localhost:27017/attenda
 const NUM_STUDENTS = 80;
 const HASH_ROUNDS  = 8;
 
-println('MONGO_URI:', MONGO_URI);
+console.log('MONGO_URI:', MONGO_URI);
 
 const rand    = (lo, hi) => lo + Math.random() * (hi - lo);
 const randInt = (lo, hi) => Math.floor(rand(lo, hi + 1));
