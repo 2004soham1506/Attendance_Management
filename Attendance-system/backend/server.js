@@ -67,7 +67,12 @@ app.use((err, req, res, next) => {
 
 // ── DB + Boot ─────────────────────────────────────────────────────────────────
 mongoose
-  .connect(process.env.MONGO_URI || 'mongodb://localhost:27017/attendance', {
+  // .connect(process.env.MONGO_URI || 'mongodb://localhost:27017/attendance', {
+  //   maxPoolSize: 50,
+  //   serverSelectionTimeoutMS: 5000,
+  //   socketTimeoutMS: 45000,
+  // })
+  .connect(process.env.MONGO_URI || 'mongodb+srv://admin:H1nvgEoQ2gul5YDG@cluster0.ksheidh.mongodb.net/attendance=Cluster0', {
     maxPoolSize: 50,
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,

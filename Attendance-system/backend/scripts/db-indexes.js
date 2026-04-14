@@ -10,7 +10,8 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 
 async function createIndexes() {
-  await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/attendance');
+  // await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/attendance');
+  await mongoose.connect(process.env.MONGO_URI || 'mongodb+srv://admin:H1nvgEoQ2gul5YDG@cluster0.ksheidh.mongodb.net/attendance=Cluster0');
   const db = mongoose.connection.db;
 
   console.log('Creating indexes...\n');

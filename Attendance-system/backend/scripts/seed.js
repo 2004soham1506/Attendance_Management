@@ -28,7 +28,8 @@ const Bucket     = require('../models/Bucket');
 const { populateLectures } = require('../utils/lecturePopulator');
 const { rebuildAllBuckets } = require('../services/bucketService');
 
-const MONGO_URI    = process.env.MONGO_URI || 'mongodb://localhost:27017/attendance';
+// const MONGO_URI    = process.env.MONGO_URI || 'mongodb://localhost:27017/attendance';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://admin:H1nvgEoQ2gul5YDG@cluster0.ksheidh.mongodb.net/attendance=Cluster0';
 const NUM_STUDENTS = 80;
 const HASH_ROUNDS  = 8;
 
