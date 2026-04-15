@@ -19,6 +19,8 @@ const { startAllJobs } = require('./jobs');
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
