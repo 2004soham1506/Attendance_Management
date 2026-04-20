@@ -69,8 +69,8 @@ app.use('/student',   studentRoutes);
 app.get('/health', (_, res) => res.json({
   status: 'ok', ts: new Date(),
   services: {
-    ble: process.env.BLE_SERVICE_URL || 'http://localhost:8000',
-    qr:  process.env.QR_SERVICE_URL  || 'http://localhost:8000',
+    ble: process.env.BLE_SERVICE_URL || 'https://ble-qr-microservice.onrender.com',
+    qr:  process.env.QR_SERVICE_URL  || 'https://ble-qr-microservice.onrender.com',
   },
 }));
 

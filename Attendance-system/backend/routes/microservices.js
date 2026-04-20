@@ -10,8 +10,8 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
-const BLE_URL   = process.env.BLE_SERVICE_URL || 'http://localhost:8000';
-const QR_URL    = process.env.QR_SERVICE_URL  || 'http://localhost:8000';
+const BLE_URL   = process.env.BLE_SERVICE_URL || 'https://ble-qr-microservice.onrender.com';
+const QR_URL    = process.env.QR_SERVICE_URL  || 'https://ble-qr-microservice.onrender.com';
 const QR_SECRET = process.env.QR_SECRET       || 'qr-secret';
 
 // ── Helper: call microservice with timeout ────────────────────────────────────
