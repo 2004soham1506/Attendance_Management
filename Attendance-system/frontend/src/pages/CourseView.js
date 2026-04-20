@@ -55,107 +55,160 @@ function InfoRow({ icon: Icon, label, value, mono }) {
 // ── BLE Beacon Panel ──────────────────────────────────────────────────────────
 // Shows live minor value fetched from the BLE microservice (via our backend proxy).
 // The ESP32 also calls GET /getMinor?major=... to get its rotating minor.
-function BleBeaconPanel({ session, courseId }) {
-  const [minorData, setMinorData]   = useState(null);
-  const [minorError, setMinorError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
 
-  // We use a placeholder major derived from the courseId as an example.
-  // In a real deployment the beacon's major is its hardware bleID from the DB.
-  // The professor panel shows the current minor so they can verify the beacon
-  // is broadcasting the correct value.
-  const exampleMajor = courseId;
+// function BleBeaconPanel({ session, courseId }) {
+//   const [minorData, setMinorData]   = useState(null);
+//   const [minorError, setMinorError] = useState("");
+//   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchMinor = useCallback(async () => {
-    setRefreshing(true);
-    setMinorError("");
-    try {
-      const r = await getMinor(exampleMajor);
-      setMinorData(r.data);
-    } catch (e) {
-      setMinorError(e.response?.data?.error || "Could not fetch minor from BLE service");
-    } finally {
-      setRefreshing(false);
-    }
-  }, [exampleMajor]);
+//   // We use a placeholder major derived from the courseId as an example.
+//   // In a real deployment the beacon's major is its hardware bleID from the DB.
+//   // The professor panel shows the current minor so they can verify the beacon
+//   // is broadcasting the correct value.
+//   const exampleMajor = courseId;
 
-  // Fetch on mount and whenever session changes
-  useEffect(() => {
-    if (!session) return;
-    fetchMinor();
-    // Refresh every 30 s (matches beacon rotation window)
-    const id = setInterval(fetchMinor, 30000);
-    return () => clearInterval(id);
-  }, [session, fetchMinor]);
+//   const fetchMinor = useCallback(async () => {
+//     setRefreshing(true);
+//     setMinorError("");
+//     try {
+//       const r = await getMinor(exampleMajor);
+//       setMinorData(r.data);
+//     } catch (e) {
+//       setMinorError(e.response?.data?.error || "Could not fetch minor from BLE service");
+//     } finally {
+//       setRefreshing(false);
+//     }
+//   }, [exampleMajor]);
 
+//   // Fetch on mount and whenever session changes
+//   useEffect(() => {
+//     if (!session) return;
+//     fetchMinor();
+//     // Refresh every 30 s (matches beacon rotation window)
+//     const id = setInterval(fetchMinor, 30000);
+//     return () => clearInterval(id);
+//   }, [session, fetchMinor]);
+
+
+//   return (
+//     <div className="bg-card border border-edge rounded-2xl p-6 space-y-4">
+//       <div className="flex items-center justify-between">
+//         <h3 className="text-snow font-semibold text-sm">BLE Beacon</h3>
+//         <button
+//           onClick={fetchMinor}
+//           disabled={refreshing}
+//           className="flex items-center gap-1.5 text-dim hover:text-azure-400 transition-colors text-xs"
+//         >
+//           <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+//           Refresh
+//         </button>
+//       </div>
+
+//       <div className="space-y-3">
+//         <InfoRow icon={Wifi}     label="Mode"       value={<Badge label="BLE" variant="ble" />} />
+//         <InfoRow icon={Activity} label="Session ID" value={session.session_id} mono />
+//         {minorData && (
+//           <>
+//             <InfoRow
+//               icon={Radio}
+//               label="Current Minor"
+//               value={
+//                 <span className="font-mono text-azure-400 font-bold text-base">
+//                   {minorData.minor}
+//                   {minorData.fallback && (
+//                     <span className="ml-2 text-amber-400 text-xs font-normal">(local)</span>
+//                   )}
+//                 </span>
+//               }
+//               mono
+//             />
+//             <InfoRow
+//               label="Expires in"
+//               value={`${minorData.expiresIn}s`}
+//               mono
+//             />
+//           </>
+//         )}
+//         {minorError && (
+//           <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+//             <AlertCircle size={13} className="text-amber-400 shrink-0" />
+//             <p className="text-amber-300 text-xs">{minorError}</p>
+//           </div>
+//         )}
+//       </div>
+
+//       <div className="p-3 rounded-xl bg-azure-500/8 border border-azure-500/15 space-y-1">
+//         <p className="text-azure-400 text-xs font-medium">ESP32 Configuration</p>
+//         <p className="text-dim text-xs font-mono break-all">
+//           GET /getMinor?major={"{beacon_bleID}"}
+//         </p>
+//         <p className="text-dim text-xs">
+//           ESP32 calls this endpoint every 30 s to get the rotating minor.
+//           Students scan the beacon — the mobile app sends beacons + session_id
+//           to POST /ble/validate.
+//         </p>
+//       </div>
+
+//       {minorData?.source === "fallback" && (
+//         <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+//           <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+//           <p className="text-amber-300 text-xs">
+//             BLE microservice unreachable — using local HMAC fallback.
+//             Attendance validation will use DB beacon lookup.
+//           </p>
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
+function BleBeaconPanel({ session }) {
   return (
-    <div className="bg-card border border-edge rounded-2xl p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="bg-card border border-edge rounded-2xl p-6 flex flex-col items-center gap-5">
+      <div className="w-full flex items-center justify-between">
         <h3 className="text-snow font-semibold text-sm">BLE Beacon</h3>
-        <button
-          onClick={fetchMinor}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 text-dim hover:text-azure-400 transition-colors text-xs"
-        >
-          <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
-          Refresh
-        </button>
+        <Badge label="BLE" variant="ble" />
       </div>
 
-      <div className="space-y-3">
-        <InfoRow icon={Wifi}     label="Mode"       value={<Badge label="BLE" variant="ble" />} />
-        <InfoRow icon={Activity} label="Session ID" value={session.session_id} mono />
-        {minorData && (
-          <>
-            <InfoRow
-              icon={Radio}
-              label="Current Minor"
-              value={
-                <span className="font-mono text-azure-400 font-bold text-base">
-                  {minorData.minor}
-                  {minorData.fallback && (
-                    <span className="ml-2 text-amber-400 text-xs font-normal">(local)</span>
-                  )}
-                </span>
-              }
-              mono
-            />
-            <InfoRow
-              label="Expires in"
-              value={`${minorData.expiresIn}s`}
-              mono
-            />
-          </>
-        )}
-        {minorError && (
-          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-            <AlertCircle size={13} className="text-amber-400 shrink-0" />
-            <p className="text-amber-300 text-xs">{minorError}</p>
-          </div>
-        )}
+      {/* Beacon animation — inline SVG */}
+      <div className="w-full flex items-center justify-center py-2">
+        <svg width="200" height="200" viewBox="0 0 200 200" role="img">
+          <title>BLE beacon broadcasting</title>
+          <style>{`
+            .ring { fill: none; stroke: #3B82F6; stroke-width: 1.2; }
+            @keyframes pulse {
+              0%   { r: 0;  opacity: 0.7; }
+              100% { r: 88; opacity: 0;   }
+            }
+            .r1 { animation: pulse 2.4s ease-out infinite; }
+            .r2 { animation: pulse 2.4s ease-out 0.8s infinite; }
+            .r3 { animation: pulse 2.4s ease-out 1.6s infinite; }
+            @keyframes nodePulse {
+              0%, 100% { r: 22; }
+              50%       { r: 25; }
+            }
+            .bcore { animation: nodePulse 2.4s ease-in-out infinite; }
+          `}</style>
+          <circle className="ring r1" cx="100" cy="100" r="0"/>
+          <circle className="ring r2" cx="100" cy="100" r="0"/>
+          <circle className="ring r3" cx="100" cy="100" r="0"/>
+          <circle cx="100" cy="100" r="50" fill="#1E3A5F" opacity="0.18"/>
+          <circle cx="100" cy="100" r="36" fill="#1E3A5F" opacity="0.22"/>
+          <circle className="bcore" cx="100" cy="100" r="22" fill="#2563EB"/>
+          <g transform="translate(100,100)">
+            <rect x="-5" y="-9" width="10" height="14" rx="2.5" fill="white" opacity="0.92"/>
+            <rect x="-2" y="4"  width="4"  height="4"  rx="1"   fill="white" opacity="0.92"/>
+            <circle cx="0" cy="0" r="2" fill="#93C5FD"/>
+          </g>
+        </svg>
       </div>
 
-      <div className="p-3 rounded-xl bg-azure-500/8 border border-azure-500/15 space-y-1">
-        <p className="text-azure-400 text-xs font-medium">ESP32 Configuration</p>
-        <p className="text-dim text-xs font-mono break-all">
-          GET /getMinor?major={"{beacon_bleID}"}
-        </p>
+      <div className="w-full space-y-1.5 text-center">
+        <p className="text-azure-400 text-sm font-medium">Broadcasting</p>
+        <p className="text-dim text-xs font-mono break-all">{session.session_id}</p>
         <p className="text-dim text-xs">
-          ESP32 calls this endpoint every 30 s to get the rotating minor.
-          Students scan the beacon — the mobile app sends beacons + session_id
-          to POST /ble/validate.
+          ESP32 beacon is active. Students scan with the mobile app to mark attendance.
         </p>
       </div>
-
-      {minorData?.source === "fallback" && (
-        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
-          <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-amber-300 text-xs">
-            BLE microservice unreachable — using local HMAC fallback.
-            Attendance validation will use DB beacon lookup.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
