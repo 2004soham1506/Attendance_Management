@@ -219,7 +219,6 @@ The system supports face recognition through integrated enrollment and verificat
 - Professors can start sessions with BLE, QR Code, or Manual attendance
 - Courses support per-schedule method assignment
 - Real-time method switching during active sessions if configured
-- Seamless fallback: If primary method (BLE) unavailable, switch to QR or manual
 
 ### Attendance Data
 - Multiple verification methods tracked: BLE, QRCode, Manual

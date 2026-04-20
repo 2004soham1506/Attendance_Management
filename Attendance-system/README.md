@@ -1,21 +1,44 @@
 # Attendance System (DIAMS)
 
 **Digital Intelligent Attendance Management System**  
-IIT Hyderabad | SWE Sprint 2
+IIT Hyderabad
 
-Complete web-based attendance management platform with real-time session tracking, analytics, and user administration. Integrates QR codes, BLE beacons, and face recognition for flexible attendance capture.
+Production-ready web-based attendance management platform with real-time session tracking, advanced analytics, and multi-method verification. Integrates BLE beacons, QR codes, and manual marking with automatic fallback mechanisms and sophisticated lecture intersection logic.
 
 ---
 
-## What This Does
+## Core Features
 
-- **Professors** can start **QR / BLE / Manual** attendance sessions and view live attendance logs
-- **Live updates** every 3 seconds as students check in with real-time dashboards
-- **Analytics dashboard** with charts, per-course breakdowns, trends, and at-risk student identification
-- **Admin panel** for system-wide statistics, service health monitoring, session management, and user administration
-- **Integration** with BLE beacon scanning and Face Recognition microservices
-- **Batch operations** - bulk student enrollment/deletion via CSV
-- **Data export** and backup capabilities
+### Three Attendance Methods
+- **BLE Beacons** — Proximity-based marking via Bluetooth Low Energy with rotating minor codes (30-sec via microservice, local HMAC fallback)
+- **QR Codes** — Time-windowed tokens (5-sec rotation via microservice, local HMAC fallback)
+- **Manual Marking** — Direct entry by professors/admins on student rosters
+
+### Intelligent Session Management
+- **Auto-Fallback Sessions** — System auto-creates 5-minute BLE sessions for scheduled lectures without manual session coverage
+- **Auto-End Sessions** — Sessions automatically terminate when IST schedule end time passes (1-min cron + client-side safety net)
+- **Multi-Session Lectures** — Support for multiple sessions per lecture (BLE + QR redundancy)
+- **Lecture Intersection Logic** — Students marked present only if they attended ALL sessions of a lecture
+
+### Real-time Dashboards & Analytics
+- **Live Attendance Updates** — Every 3 seconds during active sessions
+- **Course Analytics** — Per-lecture attendance statistics with trend analysis
+- **Per-Student Analytics** — Attendance across all enrolled courses
+- **At-Risk Student Detection** — Automatic flagging below configurable thresholds
+- **Cross-Course Summaries** — Professor/admin view of overall attendance patterns
+
+### User Roles & Access Control
+- **Professors** — Manage courses, start/end sessions, view analytics, manual marking
+- **TAs** — Limited professor access on assigned courses
+- **Admins** — System-wide management (under development)
+- **Students** — View own attendance and course enrollment
+
+### Performance & Reliability
+- **Attendance Caching** — Per-student bucket cache with real-time updates + 15-min full rebuild
+- **Automatic Backups** — Nightly JSON backups of all data (last 7 retained)
+- **Microservice Resilience** — Local HMAC fallback if BLE/QR services unavailable
+- **Session Atomicity** — MongoDB atomic operations prevent duplicate concurrent sessions
+- **Timezone Handling** — IST schedule aware with UTC lecture timestamps
 
 ---
 
@@ -23,33 +46,73 @@ Complete web-based attendance management platform with real-time session trackin
 
 ```
 Attendance-System/
-├── backend/                    # Node.js/Express API
-│   ├── config/                 # Database config
-│   ├── middleware/             # Auth, CORS, rate limiting
-│   ├── models/                 # Mongoose schemas
-│   ├── routes/                 # API endpoints
-│   ├── services/               # Business logic
-│   ├── jobs/                   # Background tasks (cron)
-│   ├── scripts/                # Database seeding
-│   ├── server.js               # Express app
+├── backend/                    # Node.js/Express API server
+│   ├── config/
+│   │   └── db.js               # MongoDB connection setup
+│   ├── middleware/
+│   │   └── auth.js             # JWT authentication
+│   ├── models/                 # 9 Mongoose schemas
+│   │   ├── Student.js          # User credentials
+│   │   ├── Professor.js        # Faculty credentials
+│   │   ├── Course.js           # Course with lectures & schedules
+│   │   ├── Session.js          # Attendance sessions
+│   │   ├── Attendance.js       # Per-student attendance records
+│   │   ├── Enrollment.js       # Course enrollment status
+│   │   ├── Beacon.js           # BLE beacon mappings
+│   │   ├── Classroom.js        # Venue info
+│   │   ├── Bucket.js           # Attendance cache (per-student)
+│   │   └── Admin.js            # Admin accounts
+│   ├── routes/                 # 9 route files (60+ endpoints)
+│   │   ├── auth.js             # /login
+│   │   ├── courses.js          # Course & schedule management
+│   │   ├── sessions.js         # Start/end sessions
+│   │   ├── attendance.js       # Mark attendance
+│   │   ├── analytics.js        # Analytics endpoints
+│   │   ├── microservices.js    # BLE/QR proxy with fallback
+│   │   ├── beacons.js          # Beacon management
+│   │   ├── qr.js               # QR code ops
+│   │   ├── student.js          # Student views
+│   │   └── admin.js            # Admin ops (disabled)
+│   ├── services/               # 4 business logic services
+│   │   ├── autoSessionService.js    # Auto-create fallback sessions
+│   │   ├── autoEndSessionService.js # Auto-end expired sessions
+│   │   ├── bucketService.js         # Attendance caching
+│   │   └── backupService.js         # Automated backups
+│   ├── jobs/
+│   │   └── index.js            # Cron scheduling (4 jobs)
+│   ├── scripts/
+│   │   ├── db-indexes.js       # Create indexes
+│   │   └── seed.js             # Seed test data
+│   ├── server.js               # Express app entry
 │   ├── package.json
 │   └── Dockerfile
 │
 ├── frontend/                   # React/Tailwind web portal
 │   ├── src/
-│   │   ├── api/                # Axios API client
-│   │   ├── components/         # Reusable UI components
-│   │   ├── context/            # Auth + scheduling context
-│   │   ├── pages/              # Page components
-│   │   │   ├── Login
-│   │   │   ├── ProfessorDashboard
-│   │   │   ├── CourseView       # Session management
-│   │   │   ├── Students         # Live attendance logs
-│   │   │   ├── Analytics        # Charts & reports
-│   │   │   ├── AdminDashboard   # Admin console
-│   │   │   └── ...
-│   │   └── App.js              # Routes
+│   │   ├── api/
+│   │   │   └── client.js       # 155+ API endpoint calls
+│   │   ├── components/
+│   │   │   ├── Layout.js       # Navigation layout
+│   │   │   └── UI.js           # Reusable UI components
+│   │   ├── context/            # State management
+│   │   │   ├── AuthContext.js  # Session & JWT
+│   │   │   └── SchedulerContext.js # Auto-session scheduling
+│   │   ├── pages/              # 11 page components
+│   │   │   ├── Login.js
+│   │   │   ├── AdminDashboard.js
+│   │   │   ├── AdminOverview.js
+│   │   │   ├── AdminCourses.js
+│   │   │   ├── AdminStudents.js
+│   │   │   ├── ProfessorDashboard.js
+│   │   │   ├── CoursesPage.js
+│   │   │   ├── CourseView.js   # Complex session lifecycle
+│   │   │   ├── Students.js     # Attendance analytics
+│   │   │   ├── Analytics.js    # Recharts visualizations
+│   │   │   └── Settings.js
+│   │   ├── App.js              # Main router
+│   │   └── index.js            # React entry
 │   ├── package.json
+│   ├── tailwind.config.js
 │   └── Dockerfile
 │
 └── docker-compose.yml          # Multi-container orchestration
@@ -61,12 +124,14 @@ Attendance-System/
 
 | Component | Technology |
 |-----------|-----------|
-| Frontend | React 19.x · Tailwind CSS 3.x · React Router 7.x · Recharts |
-| Backend | Node.js · Express.js · Mongoose 8.x |
+| Frontend | React 19.x · Tailwind CSS 3.x · Recharts 3.x · Lucide React |
+| Backend | Node.js 14+ · Express.js · Mongoose 8.x |
 | Database | MongoDB 7.0 |
-| Authentication | JWT (HS256) |
+| Authentication | JWT (HS256), sessionStorage |
+| Scheduling | node-cron (4 background jobs) |
+| Microservices | BLE service · QR service (with local HMAC fallback) |
 | Deployment | Docker · Docker Compose |
-| External | BLE scanner API · Face recognition API |
+| Production | Render.com (backend), configurable frontend
 
 ---
 
@@ -94,7 +159,109 @@ This starts:
 - **Backend** API on http://localhost:4040
 - **Frontend** on http://localhost:3000
 
-Database is seeded automatically on first run.
+## Background Jobs (Cron)
+
+Four automated jobs ensure system reliability and performance:
+
+| Job | Frequency | Purpose |
+|-----|-----------|----------|
+| **Auto-Create Fallback Sessions** | Every 1 min | Creates 5-min BLE sessions for scheduled lectures without manual session coverage (IST-aware) |
+| **Auto-End Expired Sessions** | Every 1 min | Closes sessions when IST schedule end time passes (server-side safety net) |
+| **Rebuild Attendance Cache** | Every 15 min | Refreshes per-student lecture attendance cache with intersection logic; also updates real-time after each mark |
+| **Nightly Backup** | 02:00 IST | Backs up all 9 models to JSON; retains last 7 backups |
+
+## API Endpoints Summary
+
+**60+ RESTful endpoints** organized by category:
+
+### Authentication
+- `POST /login` — Email/password login, returns JWT
+
+### Course Management (8 endpoints)
+- `GET /courses/:profId` — Professor's courses
+- `POST /courses` · `PUT /courses/:id` · `DELETE /courses/:id` — Course CRUD
+- `GET/POST/PATCH/DELETE /courses/:courseId/schedule*` — Schedule management
+
+### Sessions (4 endpoints)
+- `POST /startSession` — Start attendance session (BLE/QR/Manual)
+- `POST /endSession/:sessionId` — End session
+- `GET /activeSession?course_id=...` — Get active session
+- `GET /admin/sessions` — List all sessions
+
+### Attendance (4 endpoints)
+- `POST /markAttendance` — Mark via BLE/QR/Manual
+- `POST /manualAttendance` · `POST /manualAttendance/bulk` — Manual marking
+- `GET /attendance/:sessionId` — Session records
+
+### Analytics (4 endpoints)
+- `GET /analytics/course/:courseId` — Lecture-level stats
+- `GET /analytics/course/:courseId/students` — Per-student course analytics
+- `GET /analytics/prof/:profId` — Professor's cross-course analytics
+- `GET /analytics/at-risk/:profId` — At-risk students
+
+### Microservice Integration (6 endpoints)
+- `GET /getMinor?major=...` — BLE minor (proxies to service, HMAC fallback)
+- `POST /ble/validate` — BLE validation (proxies to service, DB fallback)
+- `GET /getQR/:sessionId` — QR generation (proxies to service, HMAC fallback)
+- `POST /qr/validate` — QR validation (proxies to service, HMAC fallback)
+- `GET /decodeQR?qr=...` — Local HMAC QR verification
+- `GET /validate?major=&minor=...` — Legacy beacon check
+
+### Student (3 endpoints)
+- `GET /student/:studentId/history/:courseId` — Attendance with lecture intersection
+- `GET /student/:studentId/courses` — Enrolled courses
+- `GET /student/:studentId/profile` — Profile info
+
+### Admin (Disabled - Under Development)
+
+## Frontend Pages & Features
+
+**11 page components** organized by role:
+
+### Authentication
+- **Login** — Email/password with role-based redirect
+
+### Admin Pages (5 pages)
+- **AdminDashboard** — System stats, user/course/enrollment management, TA assignment
+- **AdminOverview** — Statistical summaries (students, professors, courses, sessions, avg attendance)
+- **AdminCourses** — Course CRUD interface
+- **AdminStudents** — Student management and analytics
+
+### Professor Pages (3 pages)
+- **ProfessorDashboard** — Courses overview, active sessions, time-based greeting
+- **CoursesPage** — List courses with session status badges
+- **CourseView** — Complex session lifecycle: start/end, BLE minor display, QR generation/display, manual marking, schedule CRUD
+
+### Shared Pages (3 pages)
+- **Students** — Roster with attendance analytics and heatmaps
+- **Analytics** — Lecture timelines, Recharts visualizations, professor analytics, at-risk detection
+- **Settings** — User preferences
+
+## Key System Concepts
+
+### Lecture Intersection Logic
+Students marked "present" for a lecture **only if they attended ALL sessions** of that lecture. This enables:
+- Multiple backup sessions per lecture (BLE + QR)
+- Robust attendance verification
+- Flexible scheduling without double-counting
+
+### Timezone Handling
+- **Schedules**: Stored as IST strings (day name + time: "Monday 09:00")
+- **Lectures**: Stored as UTC timestamps
+- **Services**: IST timezone-aware conversions in background jobs
+- **Client**: SchedulerContext resolves active lecture within ±30-min window
+
+### Microservice Resilience
+- **Primary**: Proxies to external BLE and QR services
+- **Fallback**: Local HMAC-based crypto if services unavailable
+  - BLE minor: 30-sec rotation
+  - QR hash: 5-sec rotation
+- **Automatic**: Seamless fallback without user intervention
+
+### Attendance Caching (Bucket)
+- **Real-time**: Updated immediately after each attendance mark
+- **Safety Net**: Full rebuild every 15 minutes
+- **Purpose**: Fast analytics queries without scanning all records
 
 ### Local Development (without Docker)
 

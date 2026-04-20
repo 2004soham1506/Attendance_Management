@@ -1,70 +1,73 @@
 # Attendance System Backend
 
-Node.js/Express backend for the Digital Intelligent Attendance Management System (DIAMS). Handles all API logic for attendance tracking, session management, analytics, and user administration.
+Node.js/Express backend for the Digital Intelligent Attendance Management System (DIAMS). Handles 60+ RESTful API endpoints for attendance tracking, session management, analytics, and user administration with sophisticated multi-method verification and lecture intersection logic.
 
 ## Overview
 
-The backend provides RESTful APIs for:
-- **Authentication**: JWT-based user login and session management
-- **Course Management**: Create, update, delete courses and schedules
-- **Session Management**: Start/end attendance sessions with multiple methods (BLE, QR, Manual)
-- **Attendance Tracking**: Mark attendance, live updates, and audit logs
-- **Analytics**: Generate reports, charts, and at-risk student identification
-- **Admin Panel**: User management, system health monitoring, backup operations
-- **Integration**: Proxy connections to BLE and Face Recognition microservices
+The backend provides production-ready APIs for:
+- **Authentication**: JWT-based login (Admin, Professor, TA, Student roles)
+- **Course Management**: Full CRUD with schedules and TA assignment
+- **Session Management**: Start/end attendance sessions with three methods (BLE, QR, Manual)
+- **Attendance Tracking**: Multi-method verification with real-time bucket caching
+- **Advanced Analytics**: Lecture intersection logic, per-student tracking, at-risk detection
+- **Microservice Integration**: BLE/QR proxying with automatic local HMAC fallback
+- **Background Jobs**: 4 cron jobs for session management, caching, and backups
 
 ## Stack
 
-- **Runtime**: Node.js (v14+)
+- **Runtime**: Node.js 14+
 - **Framework**: Express.js
-- **Database**: MongoDB 7.0
-- **Authentication**: JWT (HS256)
-- **Additional**: Mongoose, bcryptjs, nodemon, node-cron
+- **Database**: MongoDB 7.0 with Mongoose 8.x
+- **Authentication**: JWT (HS256) in Authorization headers
+- **Scheduling**: node-cron for background jobs
+- **Resilience**: Automatic fallback to local HMAC when microservices unavailable
 
 ## Project Structure
 
 ```
 backend/
 ├── config/
-│   └── db.js                    # MongoDB connection setup
+│   └── db.js                      # MongoDB connection setup
 ├── middleware/
-│   └── auth.js                  # JWT authentication middleware
-├── models/                      # Mongoose schemas
-│   ├── Admin.js
-│   ├── Attendance.js
-│   ├── Beacon.js
-│   ├── Bucket.js
-│   ├── Classroom.js
-│   ├── Course.js
-│   ├── Enrollment.js
-│   ├── Professor.js
-│   ├── Session.js
-│   └── Student.js
-├── routes/                      # API endpoints
-│   ├── admin.js                 # /admin/* endpoints
-│   ├── analytics.js             # /analytics/* endpoints
-│   ├── attendance.js            # /attendance/* endpoints
-│   ├── auth.js                  # /login, /logout
-│   ├── beacons.js               # /beacons/* endpoints
-│   ├── courses.js               # /courses/* endpoints
-│   ├── microservices.js         # BLE/Face service proxies
-│   ├── qr.js                    # QR code endpoints
-│   ├── sessions.js              # /sessions/* endpoints
-│   └── student.js               # /student/* endpoints
-├── services/
-│   ├── autoSessionService.js    # Auto-start sessions via cron
-│   ├── notificationService.js   # Notification handling
-│   └── ... other services
+│   └── auth.js                    # JWT authentication middleware
+├── models/                        # 9 Mongoose schemas
+│   ├── Student.js                 # User credentials
+│   ├── Professor.js               # Faculty credentials
+│   ├── Admin.js                   # Admin accounts
+│   ├── Course.js                  # Courses with lectures & schedules
+│   ├── Session.js                 # Attendance sessions
+│   ├── Attendance.js              # Per-student attendance records
+│   ├── Enrollment.js              # Course enrollment status
+│   ├── Beacon.js                  # BLE beacon location mappings
+│   ├── Classroom.js               # Venue information
+│   └── Bucket.js                  # Per-student attendance cache
+├── routes/                        # 9 route files (60+ endpoints)
+│   ├── auth.js                    # POST /login
+│   ├── courses.js                 # Course & schedule management (8 endpoints)
+│   ├── sessions.js                # Session lifecycle (4 endpoints)
+│   ├── attendance.js              # Attendance marking (4 endpoints)
+│   ├── analytics.js               # Analytics endpoints (4 endpoints)
+│   ├── microservices.js           # BLE/QR proxy with fallback (6 endpoints)
+│   ├── beacons.js                 # Beacon management (2 endpoints)
+│   ├── qr.js                      # QR operations (local HMAC)
+│   ├── student.js                 # Student views (3 endpoints)
+│   └── admin.js                   # Admin ops (disabled)
+├── services/                      # 4 core business logic services
+│   ├── autoSessionService.js      # Auto-create fallback BLE sessions (1-min cron)
+│   ├── autoEndSessionService.js   # Auto-end expired sessions (1-min cron)
+│   ├── bucketService.js           # Per-student attendance caching (real-time + 15-min rebuild)
+│   ├── backupService.js           # Automated JSON backups (02:00 IST, last 7 retained)
+│   └── lecturePopulator.js        # Utility for initial lecture data
+├── jobs/
+│   └── index.js                   # Cron scheduling for 4 background jobs
 ├── scripts/
-│   ├── db-indexes.js            # Create database indexes
-│   └── seed.js                  # Seed test data
-├── utils/                       # Helper functions
-├── jobs/                        # Background jobs (node-cron)
-│   └── index.js
-├── server.js                    # Express app setup
+│   ├── db-indexes.js              # Create optimized database indexes
+│   └── seed.js                    # Seed test data
+├── utils/                         # Helper utilities
+├── server.js                      # Express app entry & startup
 ├── package.json
 ├── Dockerfile
-└── .env                         # Environment variables (git-ignored)
+└── .env                           # Environment variables (git-ignored)
 ```
 
 ## Database Schema
@@ -441,20 +444,6 @@ This design enables:
 - Multiple attendance methods for same lecture time
 - Analytics rollup by lecture (not session)
 - Session switching without losing lecture context
-
-## Deployment
-
-### Production Checklist
-
-- [ ] Set `NODE_ENV=production`
-- [ ] Use strong JWT_SECRET and QR_SECRET
-- [ ] Configure MONGO_URI to production MongoDB
-- [ ] Set FRONTEND_URL to production frontend domain
-- [ ] Enable HTTPS/SSL on load balancer
-- [ ] Configure rate limiting values
-- [ ] Set up log aggregation
-- [ ] Configure backup strategy
-- [ ] Test external service integrations (BLE, Face)
 
 ### Docker Image
 
