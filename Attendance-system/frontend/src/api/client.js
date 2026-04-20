@@ -1,7 +1,6 @@
 import axios from "axios";
 
 const API = axios.create({
-  // baseURL: localStorage.getItem("api_url") || "http://localhost:4040",
   baseURL: localStorage.getItem("api_url") || "https://attendance-management-gazr.onrender.com",
   timeout: 10000,
 });
@@ -40,12 +39,53 @@ export const startSession     = (data)      => API.post("/startSession", data);
 export const endSession       = (sessionId) => API.post(`/endSession/${sessionId}`);
 export const getActiveSession = (courseId)  => API.get(`/activeSession?course_id=${courseId}`);
 
-// ── BLE / QR microservice ─────────────────────────────────────────────────────
-export const bleValidate    = (data)         => API.post("/ble/validate", data);
-export const getMinor       = (major)        => API.get(`/getMinor?major=${major}`);
-export const getQR          = (sessionId)    => API.get(`/getQR/${sessionId}`);
-export const qrValidate     = (data)         => API.post("/qr/validate", data);
-export const validateBeacon = (major, minor) => API.get(`/validate?major=${major}&minor=${minor}`);
+// ── BLE microservice (proxied through our backend) ────────────────────────────
+//
+// GET  /getMinor?major=...
+//   → Backend proxies to BLE service POST /ble/generate-minor { major_id }
+//   → Returns { minor, expiresIn, major, fallback? }
+//   → ESP32 calls this to get the rotating minor it should advertise
+//
+// POST /ble/validate
+//   → Backend proxies to BLE service POST /ble/validate { class_id, beacons[] }
+//   → Body: { session_id, beacons: [{ major, minor, rssi }] }
+//   → Returns { valid, message, fallback? }
+//   → Called by mobile app after scanning BLE beacons
+//
+// GET  /validate?major=...&minor=...
+//   → DB-only legacy beacon check (no microservice call)
+//   → Used for quick admin/debug beacon verification
+//
+export const getMinor = (major) =>
+  API.get(`/getMinor?major=${encodeURIComponent(major)}`);
+
+export const bleValidate = ({ session_id, beacons }) =>
+  API.post("/ble/validate", { session_id, beacons });
+
+export const validateBeacon = (major, minor) =>
+  API.get(`/validate?major=${encodeURIComponent(major)}&minor=${encodeURIComponent(minor)}`);
+
+// ── QR microservice (proxied through our backend) ─────────────────────────────
+//
+// GET  /getQR/:sessionId
+//   → Backend proxies to QR service POST /qr/generate { class_id }
+//   → Returns { qr: hash, expiresIn: ms, sessionId, source: "service"|"fallback" }
+//   → Professor screen polls this; rendered as QR code via qrcode.react
+//
+// POST /qr/validate
+//   → Backend proxies to QR service POST /qr/validate { class_id, hash, timestamp }
+//   → Body: { session_id, hash }
+//   → Returns { valid, message, fallback? }
+//   → Called by mobile app after scanning QR code
+//
+// GET  /decodeQR?qr=...
+//   → Local HMAC-only verify (no microservice), returns sessionId if valid
+//   → Fallback for mobile apps that can't reach the backend proxy
+//
+export const getQR      = (sessionId) => API.get(`/getQR/${sessionId}`);
+export const qrValidate = ({ session_id, hash }) =>
+  API.post("/qr/validate", { session_id, hash });
+export const decodeQR   = (qr) => API.get(`/decodeQR?qr=${encodeURIComponent(qr)}`);
 
 // ── Attendance ────────────────────────────────────────────────────────────────
 export const getAttendance        = (sessionId) => API.get(`/attendance/${sessionId}`);
@@ -62,13 +102,11 @@ export const getProfAnalytics         = (profId)              => API.get(`/analy
 export const getStudentCourseHistory  = (studentId, courseId) => API.get(`/student/${studentId}/history/${courseId}`);
 export const getAtRiskStudents        = (profId)              => API.get(`/analytics/at-risk/${profId}`);
 export const getAdminStudentAnalytics = (studentId)           => API.get(`/admin/student/${studentId}/analytics`);
-
-// NEW: per-course student attendance breakdown for admin Courses page
 export const getAdminCourseAnalytics  = (courseId)            => API.get(`/admin/courses/${courseId}/analytics`);
 
 // ── Admin – Users ─────────────────────────────────────────────────────────────
 export const getAllUsers     = ()     => API.get("/admin/users");
-export const getAllStudents  = ()     => API.get("/admin/students");   // NEW: used by AdminStudents page
+export const getAllStudents  = ()     => API.get("/admin/students");
 export const createProfessor = (data) => API.post("/admin/professors", data);
 export const deleteProfessor = (id)   => API.delete(`/admin/professors/${id}`);
 export const createStudent   = (data) => API.post("/admin/students", data);

@@ -1,12 +1,16 @@
 /**
- * QR Microservice — Toy Implementation
+ * qr.js — Toy QR fallback (decodeQR only)
  *
- * Real system would be a separate service. Here we simulate:
- *  - A HMAC-signed token that rotates every 5 seconds (window = Math.floor(ts/5000))
- *  - GET /getQR/:sessionId   → returns the current token (frontend renders as QR)
- *  - GET /decodeQR?qr=...    → validates a scanned token and returns session info
+ * The real QR service endpoints (/getQR/:sessionId and /qr/validate) are
+ * handled by microservices.js which proxies to the QR microservice and only
+ * falls back to local HMAC logic when the service is unavailable.
  *
- * The token format: base64( JSON({ sessionId, window, sig: HMAC(sessionId+window) }) )
+ * This file now exposes ONLY /decodeQR — a convenience endpoint that lets
+ * any client verify a QR token locally (useful for debugging / mobile fallback)
+ * without going through the microservice.
+ *
+ * DO NOT add /getQR here — doing so creates a duplicate route that would
+ * shadow the microservice proxy registered earlier in server.js.
  */
 
 const express = require('express');
@@ -42,25 +46,9 @@ function verifyToken(token) {
   }
 }
 
-// ── GET /getQR/:sessionId ─────────────────────────────────────────────────────
-router.get('/getQR/:sessionId', authenticate, async (req, res, next) => {
-  try {
-    const { sessionId } = req.params;
-    const session = await Session.findOne({ sessionUID: sessionId }).lean();
-    if (!session) return res.status(404).json({ error: 'Session not found' });
-
-    const token   = makeToken(sessionId, currentWindow());
-    const expiresIn = 5000 - (Date.now() % 5000); // ms until next rotation
-
-    res.json({
-      qr:        token,
-      expiresIn, // frontend uses this to know when to refresh
-      sessionId,
-    });
-  } catch (err) { next(err); }
-});
-
 // ── GET /decodeQR?qr=... ──────────────────────────────────────────────────────
+// Validates a scanned QR token and returns session info.
+// Used as a local fallback when the QR microservice is unavailable.
 router.get('/decodeQR', authenticate, async (req, res, next) => {
   try {
     const { qr } = req.query;
@@ -73,8 +61,7 @@ router.get('/decodeQR', authenticate, async (req, res, next) => {
     if (!session) return res.status(404).json({ error: 'Session not found' });
 
     // Check session is still active
-    const expiresAt = new Date(session.timestamp.getTime() + session.duration * 60000);
-    if (Date.now() > expiresAt) return res.status(410).json({ error: 'Session has ended' });
+    if (!session.active) return res.status(410).json({ error: 'Session has ended' });
 
     res.json({ valid: true, sessionId, courseId: session.course, method: 'QRCode' });
   } catch (err) { next(err); }

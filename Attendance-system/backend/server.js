@@ -11,8 +11,9 @@ const sessionRoutes       = require('./routes/sessions');
 const attendanceRoutes    = require('./routes/attendance');
 const analyticsRoutes     = require('./routes/analytics');
 const adminRoutes         = require('./routes/admin');
-const microserviceRoutes  = require('./routes/microservices'); // BLE + QR proxy
-const qrRoutes            = require('./routes/qr');            // toy QR fallback (kept)
+const microserviceRoutes  = require('./routes/microservices'); // BLE + QR proxy (real service)
+const qrRoutes            = require('./routes/qr');            // local /decodeQR fallback only
+const beaconRoutes        = require('./routes/beacons');       // /getMinor, /validate, /admin/beacons
 const studentRoutes       = require('./routes/student');
 
 const { startAllJobs } = require('./jobs');
@@ -35,6 +36,24 @@ const limiter = rateLimit({ windowMs: 60 * 1000, max: 300,
 app.use(limiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+//
+// ORDER MATTERS:
+//  microserviceRoutes is mounted BEFORE qrRoutes so that:
+//    GET  /getQR/:sessionId  → microservice proxy (with service fallback)
+//    POST /ble/validate      → microservice proxy (with DB fallback)
+//    POST /qr/validate       → microservice proxy (with HMAC fallback)
+//  are all handled by microservices.js.
+//
+//  qrRoutes only exposes /decodeQR (local HMAC verify), no duplicate /getQR.
+//
+//  beaconRoutes exposes /getMinor?major= and /validate?major=&minor= for ESP32
+//  and the admin /admin/beacons endpoints.  These are DB-only routes that do NOT
+//  call the BLE microservice (the microservice proxy for /getMinor is also in
+//  microserviceRoutes).  Since both beaconRoutes and microserviceRoutes define
+//  GET /getMinor, microserviceRoutes (mounted first) wins — beaconRoutes'
+//  /getMinor is shadowed.  This is intentional: the ESP32 always gets the
+//  microservice-backed minor.
+//
 app.use('/',          authRoutes);
 app.use('/',          courseRoutes);
 app.use('/',          sessionRoutes);
@@ -42,7 +61,8 @@ app.use('/',          attendanceRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/admin',     adminRoutes);
 app.use('/',          microserviceRoutes); // /getMinor, /ble/validate, /getQR/:id, /qr/validate, /validate
-app.use('/',          qrRoutes);           // toy /decodeQR fallback
+app.use('/',          qrRoutes);           // /decodeQR only (local HMAC verify, no /getQR duplicate)
+app.use('/',          beaconRoutes);       // /admin/beacons CRUD
 app.use('/student',   studentRoutes);
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -69,11 +89,6 @@ app.use((err, req, res, next) => {
 
 // ── DB + Boot ─────────────────────────────────────────────────────────────────
 mongoose
-  // .connect(process.env.MONGO_URI || 'mongodb://localhost:27017/attendance', {
-  //   maxPoolSize: 50,
-  //   serverSelectionTimeoutMS: 5000,
-  //   socketTimeoutMS: 45000,
-  // })
   .connect(process.env.MONGO_URI || 'mongodb+srv://admin:H1nvgEoQ2gul5YDG@cluster0.ksheidh.mongodb.net/attendance=Cluster0', {
     maxPoolSize: 50,
     serverSelectionTimeoutMS: 5000,

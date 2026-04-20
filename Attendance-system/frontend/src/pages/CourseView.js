@@ -4,12 +4,14 @@ import {
   manualAttendanceBulk, getCourseStudents,
   getCourseSchedules, addSchedule as apiAddSchedule,
   updateSchedule as apiUpdateSchedule, deleteScheduleItem as apiDeleteSchedule,
+  getMinor,
 } from "../api/client";
 import { QRCodeCanvas } from "qrcode.react";
 import {
   Wifi, QrCode, Layers, Play, Square, RefreshCw, Activity,
   Users, Clock, ArrowLeft, CheckCircle2, CalendarClock,
   Plus, Trash2, ToggleLeft, ToggleRight, Pencil, Save, X,
+  Radio, AlertCircle,
 } from "lucide-react";
 import { Button, Badge, Empty, Spinner } from "../components/UI";
 import { useAuth } from "../context/AuthContext";
@@ -46,6 +48,164 @@ function InfoRow({ icon: Icon, label, value, mono }) {
         <span className="text-soft text-xs">{label}</span>
       </div>
       <span className={`text-snow text-sm ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+// ── BLE Beacon Panel ──────────────────────────────────────────────────────────
+// Shows live minor value fetched from the BLE microservice (via our backend proxy).
+// The ESP32 also calls GET /getMinor?major=... to get its rotating minor.
+function BleBeaconPanel({ session, courseId }) {
+  const [minorData, setMinorData]   = useState(null);
+  const [minorError, setMinorError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  // We use a placeholder major derived from the courseId as an example.
+  // In a real deployment the beacon's major is its hardware bleID from the DB.
+  // The professor panel shows the current minor so they can verify the beacon
+  // is broadcasting the correct value.
+  const exampleMajor = courseId;
+
+  const fetchMinor = useCallback(async () => {
+    setRefreshing(true);
+    setMinorError("");
+    try {
+      const r = await getMinor(exampleMajor);
+      setMinorData(r.data);
+    } catch (e) {
+      setMinorError(e.response?.data?.error || "Could not fetch minor from BLE service");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [exampleMajor]);
+
+  // Fetch on mount and whenever session changes
+  useEffect(() => {
+    if (!session) return;
+    fetchMinor();
+    // Refresh every 30 s (matches beacon rotation window)
+    const id = setInterval(fetchMinor, 30000);
+    return () => clearInterval(id);
+  }, [session, fetchMinor]);
+
+  return (
+    <div className="bg-card border border-edge rounded-2xl p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-snow font-semibold text-sm">BLE Beacon</h3>
+        <button
+          onClick={fetchMinor}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 text-dim hover:text-azure-400 transition-colors text-xs"
+        >
+          <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+          Refresh
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <InfoRow icon={Wifi}     label="Mode"       value={<Badge label="BLE" variant="ble" />} />
+        <InfoRow icon={Activity} label="Session ID" value={session.session_id} mono />
+        {minorData && (
+          <>
+            <InfoRow
+              icon={Radio}
+              label="Current Minor"
+              value={
+                <span className="font-mono text-azure-400 font-bold text-base">
+                  {minorData.minor}
+                  {minorData.fallback && (
+                    <span className="ml-2 text-amber-400 text-xs font-normal">(local)</span>
+                  )}
+                </span>
+              }
+              mono
+            />
+            <InfoRow
+              label="Expires in"
+              value={`${minorData.expiresIn}s`}
+              mono
+            />
+          </>
+        )}
+        {minorError && (
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+            <AlertCircle size={13} className="text-amber-400 shrink-0" />
+            <p className="text-amber-300 text-xs">{minorError}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 rounded-xl bg-azure-500/8 border border-azure-500/15 space-y-1">
+        <p className="text-azure-400 text-xs font-medium">ESP32 Configuration</p>
+        <p className="text-dim text-xs font-mono break-all">
+          GET /getMinor?major={"{beacon_bleID}"}
+        </p>
+        <p className="text-dim text-xs">
+          ESP32 calls this endpoint every 30 s to get the rotating minor.
+          Students scan the beacon — the mobile app sends beacons + session_id
+          to POST /ble/validate.
+        </p>
+      </div>
+
+      {minorData?.source === "fallback" && (
+        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+          <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-amber-300 text-xs">
+            BLE microservice unreachable — using local HMAC fallback.
+            Attendance validation will use DB beacon lookup.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── QR Panel ──────────────────────────────────────────────────────────────────
+// Displays the QR code fetched from GET /getQR/:sessionId, which proxies to
+// the QR microservice's POST /qr/generate endpoint.
+function QrPanel({ session, qr, source }) {
+  return (
+    <div className="bg-card border border-edge rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-snow font-semibold text-sm">QR Code</h3>
+        <div className="flex items-center gap-2">
+          {source === "fallback" && (
+            <span className="text-amber-400 text-xs font-mono">(local fallback)</span>
+          )}
+          <div className="flex items-center gap-1.5 text-jade-400 text-xs">
+            <RefreshCw size={11} className="animate-spin-slow" /> Refreshes every 5s
+          </div>
+        </div>
+      </div>
+
+      {qr ? (
+        <div className="flex flex-col items-center gap-4">
+          {/* QR code renders the hash value returned by the service */}
+          <div className="p-4 bg-white rounded-2xl">
+            <QRCodeCanvas value={qr} size={180} />
+          </div>
+          <div className="w-full p-2.5 rounded-xl bg-ink border border-edge text-center">
+            <p className="text-dim text-xs font-mono break-all">{qr}</p>
+          </div>
+          <p className="text-dim text-xs text-center">
+            Students scan this with the mobile app. The hash rotates every 5 s.
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-48">
+          <Spinner />
+        </div>
+      )}
+
+      {source === "fallback" && (
+        <div className="mt-3 flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+          <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-amber-300 text-xs">
+            QR microservice unreachable — showing locally-generated token.
+            Students must use the same backend for validation.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -157,6 +317,7 @@ export default function CourseView({ course, goBack }) {
   const [mode,         setMode]         = useState("BLE");
   const [session,      setSession]      = useState(null);
   const [qr,           setQr]           = useState("");
+  const [qrSource,     setQrSource]     = useState("service"); // "service" | "fallback"
   const [attendance,   setAttendance]   = useState([]);
   const [loadingStart, setLoadingStart] = useState(false);
   const [error,        setError]        = useState("");
@@ -167,9 +328,6 @@ export default function CourseView({ course, goBack }) {
   const [schLoading,   setSchLoading]   = useState(true);
   const [showSchForm,  setShowSchForm]  = useState(false);
   const [schSaving,    setSchSaving]    = useState(false);
-  // FIX: removed `switch` field from newSch default — the checkbox is gone.
-  // New schedules always start with auto-start OFF; the toggle on the row
-  // controls it after saving.
   const [newSch,       setNewSch]       = useState({
     scheduledDay: "Monday", startTime: "09:00", endTime: "09:50",
     method: "BLE",
@@ -246,11 +404,15 @@ export default function CourseView({ course, goBack }) {
       .catch(() => setRoster([]));
   }, [courseId]);
 
-  // ── QR refresh ────────────────────────────────────────────────────────────
+  // ── QR refresh — polls GET /getQR/:sessionId which proxies to QR service ──
   useEffect(() => {
-    if (!session || mode === "BLE" || mode === "Manual") return;
+    if (!session || mode !== "QRCode") return;
     const fetch = async () => {
-      try { const r = await getQR(session.session_id); setQr(r.data.qr); } catch {}
+      try {
+        const r = await getQR(session.session_id);
+        setQr(r.data.qr);
+        setQrSource(r.data.source || "service");
+      } catch {}
     };
     fetch();
     const id = setInterval(fetch, 5000);
@@ -290,7 +452,6 @@ export default function CourseView({ course, goBack }) {
   const handleAddSchedule = async () => {
     setSchSaving(true);
     try {
-      // Always add with switch: false — professor enables it via the row toggle
       await apiAddSchedule(courseId, { ...newSch, switch: false });
       await loadSchedules();
       setShowSchForm(false);
@@ -396,35 +557,17 @@ export default function CourseView({ course, goBack }) {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Left: QR / BLE info */}
         <div className="lg:col-span-2 animate-slide-up" style={{ animationDelay: "200ms" }}>
+
+          {/* QR Panel — uses QR microservice via GET /getQR/:sessionId */}
           {session && mode === "QRCode" && (
-            <div className="bg-card border border-edge rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-snow font-semibold text-sm">QR Code</h3>
-                <div className="flex items-center gap-1.5 text-jade-400 text-xs">
-                  <RefreshCw size={11} className="animate-spin-slow" /> Refreshes every 5s
-                </div>
-              </div>
-              {qr ? (
-                <div className="flex flex-col items-center gap-4">
-                  <div className="p-4 bg-white rounded-2xl">
-                    <QRCodeCanvas value={qr} size={180} />
-                  </div>
-                </div>
-              ) : <div className="flex items-center justify-center h-48"><Spinner /></div>}
-            </div>
+            <QrPanel session={session} qr={qr} source={qrSource} />
           )}
+
+          {/* BLE Panel — shows rotating minor from BLE microservice */}
           {session && mode === "BLE" && (
-            <div className="bg-card border border-edge rounded-2xl p-6">
-              <h3 className="text-snow font-semibold text-sm mb-4">Beacon Info</h3>
-              <div className="space-y-3">
-                <InfoRow icon={Wifi}     label="Mode"       value={<Badge label="BLE" variant="ble" />} />
-                <InfoRow icon={Activity} label="Session ID" value={session.session_id} mono />
-              </div>
-              <div className="mt-4 p-3 rounded-xl bg-azure-500/8 border border-azure-500/15">
-                <p className="text-azure-400 text-xs">ESP32 beacon broadcasting. Students scan with the mobile app.</p>
-              </div>
-            </div>
+            <BleBeaconPanel session={session} courseId={courseId} />
           )}
+
           {!session && (
             <div className="bg-card border border-edge rounded-2xl p-6 flex flex-col items-center justify-center h-48 gap-3">
               <div className="w-12 h-12 rounded-2xl bg-edge flex items-center justify-center">
@@ -529,10 +672,6 @@ export default function CourseView({ course, goBack }) {
           )}
         </div>
 
-        {/* Add form — FIX: "Enable auto-start" checkbox removed.
-            The switch toggle on each ScheduleRow already handles this.
-            New schedules always save with switch: false and the professor
-            enables auto-start afterwards via the row toggle. */}
         {showSchForm && !isTa && (
           <div className="px-5 py-4 border-b border-edge bg-ink space-y-3">
             <p className="text-snow text-xs font-semibold">New recurring schedule</p>
