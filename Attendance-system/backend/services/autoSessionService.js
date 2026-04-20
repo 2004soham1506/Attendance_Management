@@ -5,24 +5,31 @@
  * Creates a fallback 5-min BLE session for any lecture due right now
  * that has no active scheduled session covering it.
  *
- * Timezone contract (after lecturePopulator fix):
+ * Timezone contract:
  *   - lecture.scheduledTime  : UTC timestamp
  *   - schedule.startTime/endTime : IST strings ("HH:mm")
  *   - schedule.scheduledDay      : IST day name ("Monday" etc.)
  *
- * So we convert "now" and lecture times to IST for all comparisons.
+ * Cancellation contract:
+ *   - If lecture.cancelled === true the cron skips it entirely.
+ *     This is the server-side guard — the frontend cancel button sets
+ *     cancelled=true AND ends any running sessions atomically in the
+ *     /courses/:id/lectures/:uid/cancel route, so by the time the next
+ *     cron tick fires there is nothing to create or end.
+ *   - The DB query already filters 'lectures.cancelled': false at the
+ *     Course.find() level, providing an early short-circuit before any
+ *     per-lecture logic runs.
  */
 const Course   = require('../models/Course');
 const Session  = require('../models/Session');
 
 const DAY_NAMES      = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const IST_OFFSET_MS  = 5.5 * 60 * 60 * 1000; // 19 800 000 ms
+const IST_OFFSET_MS  = 5.5 * 60 * 60 * 1000;
 
-/** Return IST components of a UTC Date */
 function toIST(utcDate) {
   const d = new Date(utcDate.getTime() + IST_OFFSET_MS);
   return {
-    dayName: DAY_NAMES[d.getUTCDay()],
+    dayName:  DAY_NAMES[d.getUTCDay()],
     totalMin: d.getUTCHours() * 60 + d.getUTCMinutes(),
   };
 }
@@ -32,8 +39,8 @@ async function autoCreateFallbackSessions() {
   const windowStart = new Date(now.getTime() - 2 * 60000);
   const windowEnd   = new Date(now.getTime() + 2 * 60000);
 
-  const { dayName: todayName } = toIST(now);
-
+  // Only fetch courses that have at least one NON-CANCELLED lecture in the
+  // ±2-minute window. cancelled: false is indexed and short-circuits quickly.
   const courses = await Course.find({
     'lectures.scheduledTime': { $gte: windowStart, $lte: windowEnd },
     'lectures.cancelled':     false,
@@ -41,25 +48,30 @@ async function autoCreateFallbackSessions() {
 
   for (const course of courses) {
     const dueLectures = course.lectures.filter(l =>
+      // Double-check both conditions after the broader DB filter
       !l.cancelled &&
       new Date(l.scheduledTime) >= windowStart &&
       new Date(l.scheduledTime) <= windowEnd
     );
 
     for (const lecture of dueLectures) {
-      // Convert stored UTC scheduledTime to IST for schedule comparison
+      // lecture.cancelled is already false here (filtered above), but be explicit
+      if (lecture.cancelled) continue;
+
       const { dayName: lecDayName, totalMin: lecMin } = toIST(new Date(lecture.scheduledTime));
 
       // Check if a schedule entry covers this lecture time
       const covered = (course.schedules || []).some(s => {
         if (s.scheduledDay !== lecDayName) return false;
-        const [sh, sm] = s.startTime.split(':').map(Number); // IST
-        const [eh, em] = s.endTime.split(':').map(Number);   // IST
+        const [sh, sm] = s.startTime.split(':').map(Number);
+        const [eh, em] = s.endTime.split(':').map(Number);
         return lecMin >= sh * 60 + sm && lecMin < eh * 60 + em;
       });
 
+      // A schedule covers this slot — SchedulerContext will handle it
       if (covered) continue;
 
+      // Check whether an active session already exists for this lecture
       const existing = await Session.findOne({
         course:     course._id,
         lectureUID: lecture.lectureUID,

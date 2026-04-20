@@ -4,14 +4,14 @@ import {
   manualAttendanceBulk, getCourseStudents,
   getCourseSchedules, addSchedule as apiAddSchedule,
   updateSchedule as apiUpdateSchedule, deleteScheduleItem as apiDeleteSchedule,
-  getMinor,
+  getMinor, cancelLecture, uncancelLecture, getCourses, getAllCourses,
 } from "../api/client";
 import { QRCodeCanvas } from "qrcode.react";
 import {
   Wifi, QrCode, Layers, Play, Square, RefreshCw, Activity,
   Users, Clock, ArrowLeft, CheckCircle2, CalendarClock,
   Plus, Trash2, ToggleLeft, ToggleRight, Pencil, Save, X,
-  Radio, AlertCircle,
+  Radio, AlertCircle, BanIcon, RotateCcw,
 } from "lucide-react";
 import { Button, Badge, Empty, Spinner } from "../components/UI";
 import { useAuth } from "../context/AuthContext";
@@ -55,160 +55,107 @@ function InfoRow({ icon: Icon, label, value, mono }) {
 // ── BLE Beacon Panel ──────────────────────────────────────────────────────────
 // Shows live minor value fetched from the BLE microservice (via our backend proxy).
 // The ESP32 also calls GET /getMinor?major=... to get its rotating minor.
+function BleBeaconPanel({ session, courseId }) {
+  const [minorData, setMinorData]   = useState(null);
+  const [minorError, setMinorError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
-// function BleBeaconPanel({ session, courseId }) {
-//   const [minorData, setMinorData]   = useState(null);
-//   const [minorError, setMinorError] = useState("");
-//   const [refreshing, setRefreshing] = useState(false);
+  // We use a placeholder major derived from the courseId as an example.
+  // In a real deployment the beacon's major is its hardware bleID from the DB.
+  // The professor panel shows the current minor so they can verify the beacon
+  // is broadcasting the correct value.
+  const exampleMajor = courseId;
 
-//   // We use a placeholder major derived from the courseId as an example.
-//   // In a real deployment the beacon's major is its hardware bleID from the DB.
-//   // The professor panel shows the current minor so they can verify the beacon
-//   // is broadcasting the correct value.
-//   const exampleMajor = courseId;
+  const fetchMinor = useCallback(async () => {
+    setRefreshing(true);
+    setMinorError("");
+    try {
+      const r = await getMinor(exampleMajor);
+      setMinorData(r.data);
+    } catch (e) {
+      setMinorError(e.response?.data?.error || "Could not fetch minor from BLE service");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [exampleMajor]);
 
-//   const fetchMinor = useCallback(async () => {
-//     setRefreshing(true);
-//     setMinorError("");
-//     try {
-//       const r = await getMinor(exampleMajor);
-//       setMinorData(r.data);
-//     } catch (e) {
-//       setMinorError(e.response?.data?.error || "Could not fetch minor from BLE service");
-//     } finally {
-//       setRefreshing(false);
-//     }
-//   }, [exampleMajor]);
+  // Fetch on mount and whenever session changes
+  useEffect(() => {
+    if (!session) return;
+    fetchMinor();
+    // Refresh every 30 s (matches beacon rotation window)
+    const id = setInterval(fetchMinor, 30000);
+    return () => clearInterval(id);
+  }, [session, fetchMinor]);
 
-//   // Fetch on mount and whenever session changes
-//   useEffect(() => {
-//     if (!session) return;
-//     fetchMinor();
-//     // Refresh every 30 s (matches beacon rotation window)
-//     const id = setInterval(fetchMinor, 30000);
-//     return () => clearInterval(id);
-//   }, [session, fetchMinor]);
-
-
-//   return (
-//     <div className="bg-card border border-edge rounded-2xl p-6 space-y-4">
-//       <div className="flex items-center justify-between">
-//         <h3 className="text-snow font-semibold text-sm">BLE Beacon</h3>
-//         <button
-//           onClick={fetchMinor}
-//           disabled={refreshing}
-//           className="flex items-center gap-1.5 text-dim hover:text-azure-400 transition-colors text-xs"
-//         >
-//           <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
-//           Refresh
-//         </button>
-//       </div>
-
-//       <div className="space-y-3">
-//         <InfoRow icon={Wifi}     label="Mode"       value={<Badge label="BLE" variant="ble" />} />
-//         <InfoRow icon={Activity} label="Session ID" value={session.session_id} mono />
-//         {minorData && (
-//           <>
-//             <InfoRow
-//               icon={Radio}
-//               label="Current Minor"
-//               value={
-//                 <span className="font-mono text-azure-400 font-bold text-base">
-//                   {minorData.minor}
-//                   {minorData.fallback && (
-//                     <span className="ml-2 text-amber-400 text-xs font-normal">(local)</span>
-//                   )}
-//                 </span>
-//               }
-//               mono
-//             />
-//             <InfoRow
-//               label="Expires in"
-//               value={`${minorData.expiresIn}s`}
-//               mono
-//             />
-//           </>
-//         )}
-//         {minorError && (
-//           <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-//             <AlertCircle size={13} className="text-amber-400 shrink-0" />
-//             <p className="text-amber-300 text-xs">{minorError}</p>
-//           </div>
-//         )}
-//       </div>
-
-//       <div className="p-3 rounded-xl bg-azure-500/8 border border-azure-500/15 space-y-1">
-//         <p className="text-azure-400 text-xs font-medium">ESP32 Configuration</p>
-//         <p className="text-dim text-xs font-mono break-all">
-//           GET /getMinor?major={"{beacon_bleID}"}
-//         </p>
-//         <p className="text-dim text-xs">
-//           ESP32 calls this endpoint every 30 s to get the rotating minor.
-//           Students scan the beacon — the mobile app sends beacons + session_id
-//           to POST /ble/validate.
-//         </p>
-//       </div>
-
-//       {minorData?.source === "fallback" && (
-//         <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
-//           <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
-//           <p className="text-amber-300 text-xs">
-//             BLE microservice unreachable — using local HMAC fallback.
-//             Attendance validation will use DB beacon lookup.
-//           </p>
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-function BleBeaconPanel({ session }) {
   return (
-    <div className="bg-card border border-edge rounded-2xl p-6 flex flex-col items-center gap-5">
-      <div className="w-full flex items-center justify-between">
+    <div className="bg-card border border-edge rounded-2xl p-6 space-y-4">
+      <div className="flex items-center justify-between">
         <h3 className="text-snow font-semibold text-sm">BLE Beacon</h3>
-        <Badge label="BLE" variant="ble" />
+        <button
+          onClick={fetchMinor}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 text-dim hover:text-azure-400 transition-colors text-xs"
+        >
+          <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+          Refresh
+        </button>
       </div>
 
-      {/* Beacon animation — inline SVG */}
-      <div className="w-full flex items-center justify-center py-2">
-        <svg width="200" height="200" viewBox="0 0 200 200" role="img">
-          <title>BLE beacon broadcasting</title>
-          <style>{`
-            .ring { fill: none; stroke: #3B82F6; stroke-width: 1.2; }
-            @keyframes pulse {
-              0%   { r: 0;  opacity: 0.7; }
-              100% { r: 88; opacity: 0;   }
-            }
-            .r1 { animation: pulse 2.4s ease-out infinite; }
-            .r2 { animation: pulse 2.4s ease-out 0.8s infinite; }
-            .r3 { animation: pulse 2.4s ease-out 1.6s infinite; }
-            @keyframes nodePulse {
-              0%, 100% { r: 22; }
-              50%       { r: 25; }
-            }
-            .bcore { animation: nodePulse 2.4s ease-in-out infinite; }
-          `}</style>
-          <circle className="ring r1" cx="100" cy="100" r="0"/>
-          <circle className="ring r2" cx="100" cy="100" r="0"/>
-          <circle className="ring r3" cx="100" cy="100" r="0"/>
-          <circle cx="100" cy="100" r="50" fill="#1E3A5F" opacity="0.18"/>
-          <circle cx="100" cy="100" r="36" fill="#1E3A5F" opacity="0.22"/>
-          <circle className="bcore" cx="100" cy="100" r="22" fill="#2563EB"/>
-          <g transform="translate(100,100)">
-            <rect x="-5" y="-9" width="10" height="14" rx="2.5" fill="white" opacity="0.92"/>
-            <rect x="-2" y="4"  width="4"  height="4"  rx="1"   fill="white" opacity="0.92"/>
-            <circle cx="0" cy="0" r="2" fill="#93C5FD"/>
-          </g>
-        </svg>
+      <div className="space-y-3">
+        <InfoRow icon={Wifi}     label="Mode"       value={<Badge label="BLE" variant="ble" />} />
+        <InfoRow icon={Activity} label="Session ID" value={session.session_id} mono />
+        {minorData && (
+          <>
+            <InfoRow
+              icon={Radio}
+              label="Current Minor"
+              value={
+                <span className="font-mono text-azure-400 font-bold text-base">
+                  {minorData.minor}
+                  {minorData.fallback && (
+                    <span className="ml-2 text-amber-400 text-xs font-normal">(local)</span>
+                  )}
+                </span>
+              }
+              mono
+            />
+            <InfoRow
+              label="Expires in"
+              value={`${minorData.expiresIn}s`}
+              mono
+            />
+          </>
+        )}
+        {minorError && (
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+            <AlertCircle size={13} className="text-amber-400 shrink-0" />
+            <p className="text-amber-300 text-xs">{minorError}</p>
+          </div>
+        )}
       </div>
 
-      <div className="w-full space-y-1.5 text-center">
-        <p className="text-azure-400 text-sm font-medium">Broadcasting</p>
-        <p className="text-dim text-xs font-mono break-all">{session.session_id}</p>
+      <div className="p-3 rounded-xl bg-azure-500/8 border border-azure-500/15 space-y-1">
+        <p className="text-azure-400 text-xs font-medium">ESP32 Configuration</p>
+        <p className="text-dim text-xs font-mono break-all">
+          GET /getMinor?major={"{beacon_bleID}"}
+        </p>
         <p className="text-dim text-xs">
-          ESP32 beacon is active. Students scan with the mobile app to mark attendance.
+          ESP32 calls this endpoint every 30 s to get the rotating minor.
+          Students scan the beacon — the mobile app sends beacons + session_id
+          to POST /ble/validate.
         </p>
       </div>
+
+      {minorData?.source === "fallback" && (
+        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2.5">
+          <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-amber-300 text-xs">
+            BLE microservice unreachable — using local HMAC fallback.
+            Attendance validation will use DB beacon lookup.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -259,6 +206,136 @@ function QrPanel({ session, qr, source }) {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Helpers: find today's lecture for this course ─────────────────────────────
+// Mirrors the backend's resolveOrCreateLecture step 2 logic exactly:
+// finds the closest non-cancelled lecture within ±30 min of now in IST.
+// Also accepts any lecture scheduled today (same IST calendar day) within
+// ±4 hours so the button is useful before/after the exact window.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function toIST(utcDate) {
+  return new Date(utcDate.getTime() + IST_OFFSET_MS);
+}
+
+function findTodaysLectures(lectures) {
+  if (!Array.isArray(lectures)) return [];
+  const nowIST    = toIST(new Date());
+  const todayDate = nowIST.toISOString().slice(0, 10); // YYYY-MM-DD in IST
+
+  return lectures
+    .filter(l => {
+      const lecIST  = toIST(new Date(l.scheduledTime));
+      const lecDate = lecIST.toISOString().slice(0, 10);
+      return lecDate === todayDate; // any lecture scheduled on today's IST date
+    })
+    .sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime));
+}
+
+// ── Cancel lecture banner ─────────────────────────────────────────────────────
+function CancelLectureBanner({ course, courseId, onCancelled }) {
+  const lectures    = course.lectures || [];
+  const todayLecs   = findTodaysLectures(lectures);
+  const [working,   setWorking]   = useState(false);
+  const [confirm,   setConfirm]   = useState(false); // show confirm step
+  const [targetLec, setTargetLec] = useState(null);  // lecture chosen for action
+  const [err,       setErr]       = useState("");
+
+  if (todayLecs.length === 0) return null;
+
+  const handleCancel = async (lec) => {
+    setWorking(true); setErr("");
+    try {
+      await cancelLecture(courseId, lec.lectureUID);
+      setConfirm(false); setTargetLec(null);
+      onCancelled();
+    } catch (e) {
+      setErr(e.response?.data?.error || "Could not cancel lecture.");
+    } finally { setWorking(false); }
+  };
+
+  const handleUncancel = async (lec) => {
+    setWorking(true); setErr("");
+    try {
+      await uncancelLecture(courseId, lec.lectureUID);
+      onCancelled();
+    } catch (e) {
+      setErr(e.response?.data?.error || "Could not reinstate lecture.");
+    } finally { setWorking(false); }
+  };
+
+  const fmtTime = (utcStr) =>
+    toIST(new Date(utcStr)).toLocaleTimeString("en-IN", {
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
+
+  return (
+    <div className="animate-slide-up space-y-2">
+      {todayLecs.map(lec => {
+        const isCancelled = lec.cancelled;
+        return (
+          <div key={lec.lectureUID}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm
+              ${isCancelled
+                ? "bg-rose-500/8 border-rose-500/20"
+                : "bg-card border-edge"}`}>
+
+            <div className={`w-2 h-2 rounded-full shrink-0 ${isCancelled ? "bg-rose-400" : "bg-jade-400"}`} />
+
+            <div className="flex-1 min-w-0">
+              <span className="text-snow font-medium">
+                Today's lecture · {fmtTime(lec.scheduledTime)} IST
+              </span>
+              {isCancelled && (
+                <span className="ml-2 text-rose-400 text-xs font-mono">cancelled</span>
+              )}
+            </div>
+
+            {err && <p className="text-rose-400 text-xs shrink-0">{err}</p>}
+
+            {isCancelled ? (
+              <button
+                onClick={() => handleUncancel(lec)}
+                disabled={working}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-jade-500/15 text-jade-400
+                  text-xs border border-jade-500/20 hover:bg-jade-500/25 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {working ? <Spinner size={12} /> : <RotateCcw size={12} />}
+                Reinstate
+              </button>
+            ) : confirm && targetLec?.lectureUID === lec.lectureUID ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-soft text-xs">Cancel this lecture?</span>
+                <button
+                  onClick={() => handleCancel(lec)}
+                  disabled={working}
+                  className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-400 text-xs border border-rose-500/30
+                    hover:bg-rose-500/30 transition-colors disabled:opacity-50"
+                >
+                  {working ? <Spinner size={12} /> : "Yes, cancel"}
+                </button>
+                <button
+                  onClick={() => { setConfirm(false); setTargetLec(null); setErr(""); }}
+                  className="px-2 py-1.5 text-dim hover:text-snow text-xs transition-colors"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setConfirm(true); setTargetLec(lec); setErr(""); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-400
+                  text-xs border border-rose-500/20 hover:bg-rose-500/20 transition-colors shrink-0"
+              >
+                <BanIcon size={12} /> Cancel lecture
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -370,11 +447,16 @@ export default function CourseView({ course, goBack }) {
   const [mode,         setMode]         = useState("BLE");
   const [session,      setSession]      = useState(null);
   const [qr,           setQr]           = useState("");
-  const [qrSource,     setQrSource]     = useState("service"); // "service" | "fallback"
+  const [qrSource,     setQrSource]     = useState("service");
   const [attendance,   setAttendance]   = useState([]);
   const [loadingStart, setLoadingStart] = useState(false);
   const [error,        setError]        = useState("");
   const [elapsed,      setElapsed]      = useState(0);
+
+  // Local mirror of the course object so cancel/uncancel re-renders the banner
+  // without requiring a full page reload. Seeded from the prop, kept in sync
+  // by refreshCourse().
+  const [courseData,   setCourseData]   = useState(course);
 
   // Schedule state
   const [schedules,    setSchedules]    = useState([]);
@@ -405,6 +487,28 @@ export default function CourseView({ course, goBack }) {
       setSchLoading(false);
     }
   }, [courseId]);
+
+  // ── Refresh course lectures (after cancel/uncancel) ──────────────────────
+  // Re-fetches the course list and splices in the updated lectures[] so the
+  // CancelLectureBanner immediately reflects the new cancelled state without
+  // a full page reload. Also clears any active session that the cancel route
+  // closed server-side.
+  const refreshCourse = useCallback(async () => {
+    try {
+      const r = user.role === "admin"
+        ? await getAllCourses()
+        : await getCourses(user.user_id);
+      const list    = Array.isArray(r.data) ? r.data : [];
+      const updated = list.find(c => (c.id || c._id) === courseId);
+      if (updated) setCourseData(updated);
+    } catch {}
+    try {
+      const res = await getActiveSession(courseId);
+      if (!res.data?.session_id) {
+        setSession(null); setQr(""); setAttendance([]); setElapsed(0);
+      }
+    } catch {}
+  }, [courseId, user.user_id, user.role]);
 
   useEffect(() => { loadSchedules(); }, [loadSchedules]);
 
@@ -546,6 +650,10 @@ export default function CourseView({ course, goBack }) {
   const presentStudents = new Set(attendance.map(a => a.student)).size;
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
+  // Disable starting a new session if today's lecture is cancelled
+  const todayLecs        = findTodaysLectures(courseData.lectures || []);
+  const isTodayCancelled = todayLecs.length > 0 && todayLecs.every(l => l.cancelled);
+
   return (
     <div className="space-y-8">
 
@@ -570,6 +678,13 @@ export default function CourseView({ course, goBack }) {
           <button onClick={() => setError("")}><X size={14} /></button>
         </div>
       )}
+
+      {/* Cancel / reinstate today's lecture */}
+      <CancelLectureBanner
+        course={courseData}
+        courseId={courseId}
+        onCancelled={refreshCourse}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-slide-up" style={{ animationDelay: "80ms" }}>
@@ -596,9 +711,21 @@ export default function CourseView({ course, goBack }) {
           ))}
         </div>
         {!session ? (
-          <Button onClick={handleStart} loading={loadingStart} size="md">
-            <Play size={14} /> Start Session
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleStart}
+              loading={loadingStart}
+              disabled={isTodayCancelled}
+              size="md"
+            >
+              <Play size={14} /> Start Session
+            </Button>
+            {isTodayCancelled && (
+              <span className="text-rose-400 text-xs">
+                Lecture cancelled — reinstate to start a session
+              </span>
+            )}
+          </div>
         ) : (
           <Button onClick={handleEnd} variant="danger" size="md">
             <Square size={14} /> End Session

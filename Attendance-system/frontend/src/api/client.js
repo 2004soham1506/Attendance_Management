@@ -23,6 +23,15 @@ export const updateCourse      = (id, data) => API.put(`/courses/${id}`, data);
 export const deleteCourse      = (id)       => API.delete(`/courses/${id}`);
 export const getCourseStudents = (courseId) => API.get(`/course/${courseId}/students`);
 
+// ── Lectures ──────────────────────────────────────────────────────────────────
+// Cancel a lecture: sets cancelled=true and ends any active sessions for it.
+export const cancelLecture   = (courseId, lectureUID) =>
+  API.patch(`/courses/${courseId}/lectures/${lectureUID}/cancel`);
+
+// Reinstate a cancelled lecture: sets cancelled=false.
+export const uncancelLecture = (courseId, lectureUID) =>
+  API.patch(`/courses/${courseId}/lectures/${lectureUID}/uncancel`);
+
 // ── Schedules ─────────────────────────────────────────────────────────────────
 export const getCourseSchedules = (courseId)            => API.get(`/courses/${courseId}/schedules`);
 export const addSchedule        = (courseId, data)      => API.post(`/courses/${courseId}/schedule`, data);

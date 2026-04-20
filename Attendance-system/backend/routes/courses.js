@@ -1,21 +1,16 @@
 /**
- * courses.js — FIXES:
+ * courses.js
  *
- * 1. Schedule toggle: 'switch' is a reserved word in JS. Mongoose receives
- *    it fine, but when you PATCH with { switch: true } from the frontend
- *    Object.assign silently fails on reserved words in strict mode.
- *    Solution: rename the field to `enabled` in the DB too (or alias it).
- *    We keep `switch` in the schema (it works in Mongoose) but ensure
- *    the PATCH handler explicitly uses $set with a string key to avoid
- *    the reserved-word pitfall.
- *
- * 2. DELETE /courses/:id added.
- *
- * 3. TA management moved to admin routes but courses route still
- *    exposes GET /courses/:courseId/tas for the course view.
+ * Changes vs original:
+ *  - PATCH /courses/:courseId/lectures/:lectureUID/cancel   (existed, kept)
+ *  - PATCH /courses/:courseId/lectures/:lectureUID/uncancel (NEW)
+ *    Both are available to instructors AND TAs (ownsCourse covers both).
+ *    Cancelling a lecture also ends any active session tied to that lecture
+ *    so the cron does not have to race.
  */
 const express    = require('express');
 const Course     = require('../models/Course');
+const Session    = require('../models/Session');
 const Enrollment = require('../models/Enrollment');
 const Student    = require('../models/Student');
 const { authenticate, authorize, ownsCourse, requireInstructor } = require('../middleware/auth');
@@ -131,15 +126,13 @@ router.post('/courses/:courseId/schedule',
 );
 
 // ── PATCH /courses/:courseId/schedule/:index ──────────────────────────────────
-// FIX: 'switch' is a reserved word. Use string-keyed $set to avoid JS pitfall.
 router.patch('/courses/:courseId/schedule/:index',
   authenticate, ownsCourse, requireInstructor,
   async (req, res, next) => {
     try {
       const idx  = parseInt(req.params.index, 10);
-      const body = req.body; // may contain: scheduledDay, startTime, endTime, method, switch
+      const body = req.body;
 
-      // Build $set using string keys to avoid reserved-word issues
       const setObj = {};
       for (const [k, v] of Object.entries(body)) {
         setObj[`schedules.${idx}.${k}`] = v;
@@ -194,16 +187,54 @@ router.put('/courses/:courseId/schedule',
 );
 
 // ── PATCH /courses/:courseId/lectures/:lectureUID/cancel ──────────────────────
+// Marks the lecture cancelled = true.
+// Also ends any currently-active sessions tied to this lecture so students
+// cannot keep marking attendance for a cancelled class.
+// Available to instructors AND TAs (ownsCourse covers both).
 router.patch('/courses/:courseId/lectures/:lectureUID/cancel',
   authenticate, ownsCourse,
   async (req, res, next) => {
     try {
+      const { courseId, lectureUID } = req.params;
+
       const result = await Course.updateOne(
-        { _id: req.params.courseId, 'lectures.lectureUID': req.params.lectureUID },
+        { _id: courseId, 'lectures.lectureUID': lectureUID },
         { $set: { 'lectures.$.cancelled': true } }
       );
       if (result.matchedCount === 0) return res.status(404).json({ error: 'Lecture not found' });
-      res.json({ message: 'Lecture cancelled' });
+
+      // End any active sessions for this lecture so the cron and SchedulerContext
+      // do not keep them alive.
+      const endedSessions = await Session.updateMany(
+        { course: courseId, lectureUID, active: true },
+        { $set: { active: false, endedAt: new Date() } }
+      );
+
+      res.json({
+        message:      'Lecture cancelled',
+        sessionsClosed: endedSessions.modifiedCount,
+      });
+    } catch (err) { next(err); }
+  }
+);
+
+// ── PATCH /courses/:courseId/lectures/:lectureUID/uncancel ────────────────────
+// Restores a previously-cancelled lecture (cancelled = false).
+// The cron and SchedulerContext will resume normal behaviour on the next tick.
+// Available to instructors AND TAs.
+router.patch('/courses/:courseId/lectures/:lectureUID/uncancel',
+  authenticate, ownsCourse,
+  async (req, res, next) => {
+    try {
+      const { courseId, lectureUID } = req.params;
+
+      const result = await Course.updateOne(
+        { _id: courseId, 'lectures.lectureUID': lectureUID },
+        { $set: { 'lectures.$.cancelled': false } }
+      );
+      if (result.matchedCount === 0) return res.status(404).json({ error: 'Lecture not found' });
+
+      res.json({ message: 'Lecture reinstated' });
     } catch (err) { next(err); }
   }
 );
