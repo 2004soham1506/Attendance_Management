@@ -1,8 +1,19 @@
+/**
+ * jobs/index.js
+ *
+ * B4 FIX — backup cron:
+ *   Old: '0 2 * * *'  → fires at 02:00 UTC = 07:30 IST (Docker runs UTC)
+ *   New: '30 20 * * *' → fires at 20:30 UTC = 02:00 IST ✓
+ *
+ * keepAlive added — pings both Render services every 14 min so the
+ * free-tier 15-min inactivity shutdown never triggers.
+ */
 const cron                           = require('node-cron');
 const { rebuildAllBuckets }          = require('../services/bucketService');
 const { autoCreateFallbackSessions } = require('../services/autoSessionService');
 const { autoEndExpiredSessions }     = require('../services/autoEndSessionService');
 const { runBackup }                  = require('../services/backupService');
+const { startKeepAlive }             = require('../services/keepAlive');
 
 function startAllJobs() {
   // ── Auto-session fallback: every minute ────────────────────────────────────
@@ -30,6 +41,9 @@ function startAllJobs() {
     try { await runBackup(); }
     catch (e) { console.error('[Cron:Backup]', e.message); }
   });
+
+  // ── Keep Render free-tier services alive (ping every 14 min) ──────────────
+  startKeepAlive();
 
   console.log('[Cron] All jobs started');
 }
