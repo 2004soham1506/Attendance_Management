@@ -5,10 +5,45 @@ import { getCourses, getActiveSession, startSession, endSession, getCourseSchedu
 const SchedulerContext = createContext(null);
 
 // ── Timezone helpers ──────────────────────────────────────────────────────────
+
+/**
+ * B8 FIX — nowIST()
+ *
+ * Old implementation parsed a locale string as a new Date():
+ *   const ist = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+ *   return { dayIdx: ist.getDay(), nowMin: ist.getHours() * 60 + ist.getMinutes() };
+ *
+ * This is implementation-defined: V8 happens to parse the en-US locale string
+ * as local time (not UTC), which gives the right wall-clock fields — but only
+ * because the parsed Date's UTC epoch equals the IST wall-clock time numerically.
+ * It breaks if the host locale changes or on non-V8 runtimes.
+ *
+ * Fixed: use Intl.DateTimeFormat.formatToParts(), which is guaranteed by spec
+ * to return the correct civil time fields for the given timeZone.
+ */
+const IST_WEEKDAY_TO_IDX = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
 function nowIST() {
-  const istString = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-  const ist = new Date(istString);
-  return { dayIdx: ist.getDay(), nowMin: ist.getHours() * 60 + ist.getMinutes() };
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone:  "Asia/Kolkata",
+    weekday:   "short",   // "Mon", "Tue" …
+    hour:      "numeric", // 0-23 when hour12: false
+    minute:    "numeric",
+    hour12:    false,
+  }).formatToParts(new Date());
+
+  const get     = (type) => parseInt(parts.find(p => p.type === type)?.value ?? "0", 10);
+  const weekday = parts.find(p => p.type === "weekday")?.value ?? "Sun";
+
+  // hour "24" can appear for midnight in some Intl implementations — clamp to 0
+  const hour = get("hour") % 24;
+
+  return {
+    dayIdx: IST_WEEKDAY_TO_IDX[weekday] ?? 0,
+    nowMin: hour * 60 + get("minute"),
+  };
 }
 
 const DAY_TO_IDX = {
@@ -22,23 +57,17 @@ const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // 19 800 000 ms
  * Given the course's lectures array and the current IST time, find the lecture
  * whose scheduledTime (stored as UTC) falls within ±30 min of now.
  *
- * This is the client-side mirror of resolveOrCreateLecture's step 2.
- * By resolving the lectureUID here and passing it explicitly to startSession,
- * the backend never needs to guess and never creates an ad-hoc duplicate.
- *
- * scheduledTime in DB is UTC.  We convert to IST minutes-since-midnight to
- * match the schedule's startTime/endTime strings.
+ * scheduledTime in DB is UTC.  We add IST_OFFSET_MS to get the IST epoch,
+ * then read its UTC fields — which equal the IST civil time fields.
  */
 function findActiveLecture(lectures, nowMin, dayIdx) {
-  const WINDOW_MIN = 30; // ±30 minutes
+  const WINDOW_MIN = 30;
 
   const candidates = (lectures || [])
     .filter(l => !l.cancelled)
     .map(l => {
-      // Convert stored UTC scheduledTime → IST
-      const utcMs  = new Date(l.scheduledTime).getTime();
-      const istMs  = utcMs + IST_OFFSET_MS;
-      const istD   = new Date(istMs);
+      const istMs     = new Date(l.scheduledTime).getTime() + IST_OFFSET_MS;
+      const istD      = new Date(istMs);
       const lecDayIdx = istD.getUTCDay();
       const lecMin    = istD.getUTCHours() * 60 + istD.getUTCMinutes();
       const diff      = Math.abs(lecMin - nowMin);
@@ -47,20 +76,18 @@ function findActiveLecture(lectures, nowMin, dayIdx) {
     .filter(l => l.lecDayIdx === dayIdx && l.diff <= WINDOW_MIN)
     .sort((a, b) => a.diff - b.diff);
 
-  return candidates[0] || null; // closest match within window, or null
+  return candidates[0] || null;
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 export function SchedulerProvider({ children }) {
-  const { user }   = useAuth();
-  const stateRef   = useRef({ courses: [], scheduleCache: {} });
+  const { user }  = useAuth();
+  const stateRef  = useRef({ courses: [], scheduleCache: {} });
 
   useEffect(() => {
-    // Only run for prof and TA roles
     if (!user || (user.role !== "prof" && user.role !== "ta")) return;
 
     async function tick() {
-      // 1. Refresh course list (includes lectures[])
       try {
         const res = await getCourses(user.user_id);
         stateRef.current.courses = res.data;
@@ -71,11 +98,10 @@ export function SchedulerProvider({ children }) {
       const { dayIdx, nowMin } = nowIST();
 
       for (const course of stateRef.current.courses) {
-        // 2. Fetch schedules from DB (cached per-course, refresh every 5 min)
-        const cacheKey    = course.id || course._id;
-        const cacheEntry  = stateRef.current.scheduleCache[cacheKey];
-        const CACHE_TTL   = 5 * 60 * 1000;
-        let schedules     = cacheEntry?.data || [];
+        const cacheKey   = course.id || course._id;
+        const cacheEntry = stateRef.current.scheduleCache[cacheKey];
+        const CACHE_TTL  = 5 * 60 * 1000;
+        let schedules    = cacheEntry?.data || [];
 
         if (!cacheEntry || Date.now() - cacheEntry.fetchedAt > CACHE_TTL) {
           try {
@@ -89,63 +115,43 @@ export function SchedulerProvider({ children }) {
 
         if (!schedules.length) continue;
 
-        // 3. Check for active session
         let activeSess = null;
         try {
           const r = await getActiveSession(cacheKey);
           if (r.data?.session_id) activeSess = r.data;
         } catch {}
 
-        // 4. Find a schedule window that is active right now (switch must be ON)
+        // Find a schedule window active right now (switch must be ON)
         const activeWindow = schedules.find(sch => {
           if (!sch.switch) return false;
           const schDayIdx = DAY_TO_IDX[sch.scheduledDay];
           if (schDayIdx !== dayIdx) return false;
           const [sh, sm] = sch.startTime.split(":").map(Number);
           const [eh, em] = sch.endTime.split(":").map(Number);
-          const startMin = sh * 60 + sm;
-          const endMin   = eh * 60 + em;
-          return nowMin >= startMin && nowMin < endMin;
+          return nowMin >= sh * 60 + sm && nowMin < eh * 60 + em;
         });
 
         const schedulerKey = `scheduler_sess_${cacheKey}`;
 
         if (activeWindow && !activeSess) {
-          // FIX: resolve the lectureUID on the client before calling startSession.
-          // Previously no lectureUID was passed, so the backend's resolveOrCreateLecture
-          // had to guess.  Under concurrent/rapid ticks both requests would see the
-          // same stale course (no ad-hoc lecture yet) and each independently push a
-          // new lecture → two entries with the same scheduledTime.
-          //
-          // By finding the matching lecture here and passing its UID explicitly, the
-          // backend skips the ad-hoc creation path entirely (step 1 of
-          // resolveOrCreateLecture returns immediately).  If no lecture is found
-          // within ±30 min we still fall back to letting the backend handle it, but
-          // that case should be rare after the lecturePopulator UTC fix.
           const activeLecture = findActiveLecture(course.lectures, nowMin, dayIdx);
-
           const method = activeWindow.method || "BLE";
           try {
             const res = await startSession({
-              course_id:  cacheKey,
-              mode:       method,
-              // Pass the resolved lectureUID — backend uses it directly in step 1,
-              // bypassing the find-closest / ad-hoc-create logic entirely.
+              course_id: cacheKey,
+              mode:      method,
               ...(activeLecture ? { lectureUID: activeLecture.lectureUID } : {}),
             });
             if (res.data?.session_id) {
               sessionStorage.setItem(schedulerKey, String(res.data.session_id));
             }
           } catch (e) {
-            // 409 = session already exists for this lecture+method — record it so
-            // we can end it when the window closes.
             if (e.response?.status === 409 && e.response?.data?.session_id) {
               sessionStorage.setItem(schedulerKey, String(e.response.data.session_id));
             }
           }
 
         } else if (!activeWindow && activeSess) {
-          // Outside window — end only if this scheduler started it
           const schedulerSessId = sessionStorage.getItem(schedulerKey);
           if (schedulerSessId && String(activeSess.session_id) === schedulerSessId) {
             try { await endSession(activeSess.session_id); } catch {}

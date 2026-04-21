@@ -216,25 +216,19 @@ function QrPanel({ session, qr, source }) {
 //   - Its scheduledTime has not yet passed (or is within a 15-min past grace
 //     window — so a prof can still cancel right after a class was supposed to
 //     start but hasn't had attendance marked yet).
-const IST_OFFSET_MS  = 5.5 * 60 * 60 * 1000;
-const CANCEL_GRACE_MS = 15 * 60 * 1000; // 15 min past the start time
-
-function toIST(utcDate) {
-  return new Date(utcDate.getTime() + IST_OFFSET_MS);
-}
-
+const CANCEL_GRACE_MS = 15 * 60 * 1000;
+ 
 function findCancellableLectures(lectures) {
   if (!Array.isArray(lectures)) return [];
-  const now        = Date.now();
-  const nowIST     = toIST(new Date(now));
-  const todayDate  = nowIST.toISOString().slice(0, 10); // YYYY-MM-DD in IST
-
+  const now = Date.now();
+ 
+  // Use "en-CA" locale which always produces "YYYY-MM-DD" — safe for comparison.
+  const todayDate = new Date(now).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+ 
   return lectures
     .filter(l => {
-      const lecIST  = toIST(new Date(l.scheduledTime));
-      const lecDate = lecIST.toISOString().slice(0, 10);
+      const lecDate = new Date(l.scheduledTime).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
       if (lecDate !== todayDate) return false;
-      // Only show if the lecture hasn't well and truly passed
       const lecMs = new Date(l.scheduledTime).getTime();
       return now <= lecMs + CANCEL_GRACE_MS;
     })
@@ -274,7 +268,8 @@ function CancelLectureBanner({ course, courseId, onCancelled }) {
   };
 
   const fmtTime = (utcStr) =>
-    toIST(new Date(utcStr)).toLocaleTimeString("en-IN", {
+    new Date(utcStr).toLocaleTimeString("en-IN", {
+      timeZone: "Asia/Kolkata",
       hour: "2-digit", minute: "2-digit", hour12: true,
     });
 

@@ -10,7 +10,13 @@ const COURSE_COLORS = [
 ];
 
 function getGreeting() {
-  const h = new Date().getHours();
+  // Use Intl to get the IST hour reliably, regardless of browser/server TZ.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(new Date());
+  const h = parseInt(parts.find(p => p.type === "hour")?.value ?? "0", 10) % 24;
   if (h < 12) return "morning";
   if (h < 17) return "afternoon";
   return "evening";

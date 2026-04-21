@@ -86,7 +86,7 @@ export default function Layout({ page, setPage, children }) {
           <div>
             <h1 className="text-snow font-semibold text-sm capitalize">{pageLabel}</h1>
             <p className="text-soft text-xs mt-0.5">
-              {new Date().toLocaleDateString("en-IN", { weekday: "long", month: "long", day: "numeric" })}
+              {new Date().toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "long", month: "long", day: "numeric" })}
             </p>
           </div>
           <div className="flex items-center gap-3">

@@ -1,39 +1,59 @@
 /**
  * sessions.js
  *
- * FIXES:
+ * FIXES (timezone audit):
  *
- * 1. resolveOrCreateLecture is now atomic.
- *    Previously two concurrent startSession calls would both:
- *      a) fetch the same stale course document (no ad-hoc lecture yet)
- *      b) independently reach step 3 (no match found)
- *      c) both push a new lecture via $push → two lectures, same scheduledTime
+ * B1 — resolveOrCreateLecture Step 3 previously stored scheduledTime as the
+ *      exact UTC wall-clock moment (e.g. 10:52 UTC = 4:22 PM IST).
+ *      Now snaps to the floor of the current IST hour, stored back as UTC.
+ *      e.g. session at 4:22 PM IST → scheduledTime = 10:30 UTC (= 4:00 PM IST).
  *
- *    The fix uses findOneAndUpdate with $push filtered by
- *    $not / $elemMatch so that only ONE caller ever pushes a new lecture.
- *    If the push is a no-op (another caller already pushed), we re-fetch
- *    the course and find the lecture that was just created.
- *
- * 2. SchedulerContext now passes the lectureUID explicitly (after resolving it
- *    client-side against the lectures array), so step 1 of resolveOrCreateLecture
- *    returns immediately and the ad-hoc path is never reached during scheduled
- *    sessions.  The atomic logic here is a safety backstop for manual starts
- *    and any edge cases.
- *
- * 3. Active session uses active:true flag.
- *
- * 4. Lecture matching window: ±30 minutes (IST-aware after lecturePopulator fix).
+ * B2 — POST /startSession previously used DEFAULT_LECTURE_DURATION_MIN (55 min)
+ *      for every ad-hoc session regardless of slot type.
+ *      Now derives duration from SLOT_MAP[course.slot] for the current UTC day,
+ *      so lab slots (85 min) are handled correctly.
  */
 const express  = require('express');
 const { v4: uuidv4 } = require('uuid');
 const Session  = require('../models/Session');
 const Course   = require('../models/Course');
 const { authenticate } = require('../middleware/auth');
+const { SLOT_MAP } = require('../utils/lecturePopulator');
 
 const router = express.Router();
 
-const LECTURE_MATCH_WINDOW_MS    = 30 * 60 * 1000; // ±30 min
-const DEFAULT_LECTURE_DURATION_MIN = 55;
+const LECTURE_MATCH_WINDOW_MS = 30 * 60 * 1000; // ±30 min
+const IST_OFFSET_MS           = 5.5 * 60 * 60 * 1000;
+const FALLBACK_DURATION_MIN   = 55;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Snap a UTC Date to the floor of the current IST hour, returned as UTC.
+ * e.g. 10:52 UTC (= 16:22 IST) → 10:30 UTC (= 16:00 IST)
+ * e.g. 22:47 UTC (= 04:17 IST next day) → 22:30 UTC (= 04:00 IST next day)
+ */
+function floorToISTHour(utcDate) {
+  // Shift to IST space, zero the minutes, shift back
+  const istMs = utcDate.getTime() + IST_OFFSET_MS;
+  const floored = new Date(istMs);
+  floored.setUTCMinutes(0, 0, 0);
+  return new Date(floored.getTime() - IST_OFFSET_MS);
+}
+
+/**
+ * Derive session duration from SLOT_MAP for the given slot and UTC day index.
+ * Returns minutes (e.g. 55 for theory slots, 85 for lab slots).
+ * Falls back to FALLBACK_DURATION_MIN for unknown slots.
+ */
+function slotDurationMin(slot, utcDayIdx) {
+  const windows = SLOT_MAP[slot] || [];
+  const w = windows.find(x => x.day === utcDayIdx);
+  if (!w) return FALLBACK_DURATION_MIN;
+  const [sh, sm] = w.start.split(':').map(Number);
+  const [eh, em] = w.end.split(':').map(Number);
+  return (eh * 60 + em) - (sh * 60 + sm);
+}
 
 // ── Resolve or create a lecture — ATOMIC ──────────────────────────────────────
 /**
@@ -72,9 +92,12 @@ async function resolveOrCreateLecture(courseId, providedLectureUID) {
 
   // Step 3: no match — create exactly ONE ad-hoc lecture atomically.
   //
-  // Round scheduledTime down to the nearest minute for cleanliness.
-  const scheduledTime  = new Date(Math.floor(now.getTime() / 60000) * 60000);
-  const newLectureUID  = uuidv4();
+  // B1 FIX: snap scheduledTime to the floor of the current IST hour (not
+  // the exact wall-clock minute). A session started at 4:22 PM IST will
+  // record scheduledTime = 4:00 PM IST (stored as UTC), so the UI shows
+  // the correct hour and autoEndSessionService condition 2 matches correctly.
+  const scheduledTime = floorToISTHour(now);
+  const newLectureUID = uuidv4();
 
   // Only push if there is NO existing non-cancelled lecture within the same
   // ±30 min window.  The $not/$elemMatch condition is evaluated atomically by
@@ -109,7 +132,7 @@ async function resolveOrCreateLecture(courseId, providedLectureUID) {
 
   if (updated) {
     // We were the one who pushed — return the new lecture.
-    console.log(`[Session] Created ad-hoc lecture ${newLectureUID} for course ${courseId} at ${scheduledTime.toISOString()}`);
+    console.log(`[Session] Created ad-hoc lecture ${newLectureUID} for course ${courseId} at ${scheduledTime.toISOString()} (IST floor-of-hour)`);
     return { lectureUID: newLectureUID, scheduledTime, wasCreated: true };
   }
 
@@ -153,11 +176,6 @@ router.post('/startSession', authenticate, async (req, res, next) => {
       await resolveOrCreateLecture(course_id, lectureUID);
 
     // Guard: no duplicate active session for same (course, lectureUID, method).
-    // This check + Session.create is not a two-phase atomic op, but a unique
-    // index on { course, lectureUID, method, active } would be the hard guard.
-    // In practice, since SchedulerContext now passes lectureUID explicitly and
-    // checks for an active session before calling startSession, duplicate calls
-    // are extremely unlikely and the 409 response handles them gracefully.
     const existing = await Session.findOne({
       course:     course_id,
       lectureUID: resolvedUID,
@@ -172,11 +190,17 @@ router.post('/startSession', authenticate, async (req, res, next) => {
       });
     }
 
+    // B2 FIX: derive duration from SLOT_MAP rather than hard-coding 55 min.
+    // Use the UTC day of scheduledTime (not now) so sessions near midnight
+    // use the correct day's slot window.
+    const utcDayIdx = new Date(scheduledTime).getUTCDay();
+    const duration  = slotDurationMin(course.slot, utcDayIdx);
+
     const session = await Session.create({
       course:          course_id,
       lectureUID:      resolvedUID,
       scheduledTime,
-      duration:        DEFAULT_LECTURE_DURATION_MIN,
+      duration,
       method:          mode,
       isAutoGenerated: false,
       active:          true,
