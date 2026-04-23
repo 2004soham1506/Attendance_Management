@@ -418,6 +418,7 @@ export default function Students() {
   }, [user.user_id]);
 
   // ── Poll active sessions for selected course ───────────────────────────────
+  // Reduced from 5s to 10s to minimize server load
   useEffect(() => {
     if (!selected) return;
     const poll = async () => {
@@ -429,7 +430,7 @@ export default function Students() {
       }
     };
     poll();
-    const t = setInterval(poll, 5000);
+    const t = setInterval(poll, 10000);
     return () => clearInterval(t);
   }, [selected?.id]);
 

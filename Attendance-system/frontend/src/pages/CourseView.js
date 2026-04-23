@@ -656,7 +656,8 @@ export default function CourseView({ course, goBack }) {
       } catch {}
     };
     fetch();
-    const id = setInterval(fetch, 5000);
+    // Reduced from 5s to 10s to minimize server load
+    const id = setInterval(fetch, 10000);
     return () => clearInterval(id);
   }, [session, mode]);
 
@@ -667,7 +668,8 @@ export default function CourseView({ course, goBack }) {
       try { const r = await getAttendance(session.session_id); setAttendance(r.data); } catch {}
     };
     fetch();
-    const id = setInterval(fetch, 3000);
+    // Reduced from 3s to 5s to minimize server load
+    const id = setInterval(fetch, 5000);
     return () => clearInterval(id);
   }, [session]);
 

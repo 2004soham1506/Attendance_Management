@@ -39,7 +39,8 @@ export default function CoursesPage({ setActiveCourse }) {
       }
     }
     load();
-    const t = setInterval(load, 10000);
+    // Reduced from 10s to 15s to minimize server load
+    const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, [user.user_id]);
 
