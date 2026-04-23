@@ -146,4 +146,42 @@ router.get('/:studentId/profile', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── PATCH /student/:studentId/photo ──────────────────────────────────────────
+// Updates (or sets for the first time) the student's imageURL.
+// A student can only update their own photo; admins can update any student's.
+router.patch('/:studentId/photo', authenticate, async (req, res, next) => {
+  try {
+    const { studentId } = req.params;
+
+    // Students can only update their own photo; admins can update anyone's.
+    if (req.user.role === 'student' && req.user.user_id !== studentId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (req.user.role === 'ta' || req.user.role === 'prof') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { imageURL } = req.body;
+    if (!imageURL || typeof imageURL !== 'string' || !imageURL.trim()) {
+      return res.status(400).json({ error: 'imageURL is required and must be a non-empty string' });
+    }
+
+    // Basic URL format check — rejects obviously malformed values before they
+    // reach the face-recognition service.
+    try { new URL(imageURL); } catch {
+      return res.status(400).json({ error: 'imageURL must be a valid URL' });
+    }
+
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      { $set: { imageURL: imageURL.trim() } },
+      { new: true }
+    ).select('-password').lean();
+
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    res.json({ message: 'Photo updated successfully', imageURL: student.imageURL });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
