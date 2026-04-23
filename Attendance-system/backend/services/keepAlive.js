@@ -40,7 +40,7 @@ const TARGETS = [
   },
 ];
 
-const INTERVAL_MS  = 14 * 60 * 1000; // 14 minutes
+const INTERVAL_MS  = 5 * 60 * 1000; // 5 minutes
 const TIMEOUT_MS   = 10 * 1000;      // 10-second request timeout
 
 // ── Ping helper ───────────────────────────────────────────────────────────────
